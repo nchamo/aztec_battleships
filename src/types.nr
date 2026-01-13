@@ -32,17 +32,17 @@ impl ToField for GameId {
 // Type alias for coordinates (cleaner map keys)
 pub type Coordinate = Field;
 
-#[derive(Packable, Serialize, Deserialize)]
-#[note]
-pub struct ShotNote {
-    pub shot: Shot,
-}
-
 // Shot coordinates
 #[derive(Packable, Serialize, Deserialize)]
 pub struct Shot {
     pub x: u8,
     pub y: u8,
+}
+
+#[derive(Packable, Serialize, Deserialize)]
+#[note]
+pub struct ShotNote {
+    pub shot: Shot,
 }
 
 impl Shot {

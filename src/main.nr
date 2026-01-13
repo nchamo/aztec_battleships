@@ -31,7 +31,7 @@ contract Battleships {
         BOARD_SIZE, TOTAL_SHIP_CELLS, TURN_TIMEOUT,
         STATUS_CREATED, STATUS_ACTIVE, STATUS_COMPLETED,
     };
-    use crate::utils::{validate_ships, check_hit};
+    use crate::utils::validate_ships;
     use uint_note::uint_note::UintNote;
     use address_note::address_note::AddressNote;
 
@@ -289,14 +289,14 @@ contract Battleships {
         self.storage.private_last_action_timestamp
             .at(game_id)
             .at(player)
-            .replace(|_| UintNote{ value: timestamp as u128 })
+            .initialize_or_replace(|_| UintNote{ value: timestamp as u128 })
             .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
 
         // "Send" shot to opponent
         self.storage.private_last_opponent_shot
             .at(game_id)
             .at(opponent)
-            .initialize(ShotNote { shot })
+            .initialize_or_replace(|_|ShotNote { shot })
             .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);                
     }
    
@@ -316,7 +316,7 @@ contract Battleships {
             .get_note()
             .value;
 
-        assert(last_timestamp - current_timestamp > (TURN_TIMEOUT as u128), "Opponent did not abandon");
+        assert(current_timestamp - last_timestamp > (TURN_TIMEOUT as u128), "Opponent did not abandon");
 
         // Call public function to mark abandonment
         Battleships::at(self.context.this_address())
@@ -346,84 +346,67 @@ contract Battleships {
         ships: ShipPlacement,
         owner: AztecAddress
     ) {
-        // Expand all ships to their cell coordinates and mark them in storage
+        // Expand all ships to their cell coordinates
         let carrier_cells = crate::utils::expand_ship(ships.carrier, crate::types::SHIP_SIZES[0]);
         let battleship_cells = crate::utils::expand_ship(ships.battleship, crate::types::SHIP_SIZES[1]);
         let cruiser_cells = crate::utils::expand_ship(ships.cruiser, crate::types::SHIP_SIZES[2]);
         let submarine_cells = crate::utils::expand_ship(ships.submarine, crate::types::SHIP_SIZES[3]);
         let destroyer_cells = crate::utils::expand_ship(ships.destroyer, crate::types::SHIP_SIZES[4]);
 
-        // Mark carrier cells
-        for i in 0..5 {
-            if (i as u8) < crate::types::SHIP_SIZES[0] {
-                let x = carrier_cells[i].0 as Field;
-                let y = carrier_cells[i].1 as Field;
-                self.storage.private_my_ships_placement
-                    .at(game_id)
-                    .at(x)
-                    .at(y)
-                    .at(owner)
-                    .initialize(UintNote{value: 1})
-                    .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
-            }
-        }
+        // Initialize all board positions
+        for x in 0..BOARD_SIZE {
+            for y in 0..BOARD_SIZE {
+                let x_u8 = x as u8;
+                let y_u8 = y as u8;
+                let x_field = x as Field;
+                let y_field = y as Field;
 
-        // Mark battleship cells
-        for i in 0..5 {
-            if (i as u8) < crate::types::SHIP_SIZES[1] {
-                let x = battleship_cells[i].0 as Field;
-                let y = battleship_cells[i].1 as Field;
-                self.storage.private_my_ships_placement
-                    .at(game_id)
-                    .at(x)
-                    .at(y)
-                    .at(owner)
-                    .initialize(UintNote{value: 1})
-                    .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
-            }
-        }
+                // Check if this position has a ship
+                let mut has_ship = false;
 
-        // Mark cruiser cells
-        for i in 0..5 {
-            if (i as u8) < crate::types::SHIP_SIZES[2] {
-                let x = cruiser_cells[i].0 as Field;
-                let y = cruiser_cells[i].1 as Field;
-                self.storage.private_my_ships_placement
-                    .at(game_id)
-                    .at(x)
-                    .at(y)
-                    .at(owner)
-                    .initialize(UintNote{value: 1})
-                    .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
-            }
-        }
+                // Check carrier
+                for i in 0..5 {
+                    if ((i as u8) < crate::types::SHIP_SIZES[0]) & (carrier_cells[i].0 == x_u8) & (carrier_cells[i].1 == y_u8) {
+                        has_ship = true;
+                    }
+                }
 
-        // Mark submarine cells
-        for i in 0..5 {
-            if (i as u8) < crate::types::SHIP_SIZES[3] {
-                let x = submarine_cells[i].0 as Field;
-                let y = submarine_cells[i].1 as Field;
-                self.storage.private_my_ships_placement
-                    .at(game_id)
-                    .at(x)
-                    .at(y)
-                    .at(owner)
-                    .initialize(UintNote{value: 1})
-                    .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
-            }
-        }
+                // Check battleship
+                for i in 0..5 {
+                    if ((i as u8) < crate::types::SHIP_SIZES[1]) & (battleship_cells[i].0 == x_u8) & (battleship_cells[i].1 == y_u8) {
+                        has_ship = true;
+                    }
+                }
 
-        // Mark destroyer cells
-        for i in 0..5 {
-            if (i as u8) < crate::types::SHIP_SIZES[4] {
-                let x = destroyer_cells[i].0 as Field;
-                let y = destroyer_cells[i].1 as Field;
+                // Check cruiser
+                for i in 0..5 {
+                    if ((i as u8) < crate::types::SHIP_SIZES[2]) & (cruiser_cells[i].0 == x_u8) & (cruiser_cells[i].1 == y_u8) {
+                        has_ship = true;
+                    }
+                }
+
+                // Check submarine
+                for i in 0..5 {
+                    if ((i as u8) < crate::types::SHIP_SIZES[3]) & (submarine_cells[i].0 == x_u8) & (submarine_cells[i].1 == y_u8) {
+                        has_ship = true;
+                    }
+                }
+
+                // Check destroyer
+                for i in 0..5 {
+                    if ((i as u8) < crate::types::SHIP_SIZES[4]) & (destroyer_cells[i].0 == x_u8) & (destroyer_cells[i].1 == y_u8) {
+                        has_ship = true;
+                    }
+                }
+
+                // Initialize with 1 if ship, 0 if empty
+                let value = if has_ship { 1 } else { 0 };
                 self.storage.private_my_ships_placement
                     .at(game_id)
-                    .at(x)
-                    .at(y)
+                    .at(x_field)
+                    .at(y_field)
                     .at(owner)
-                    .initialize(UintNote{value: 1})
+                    .initialize(UintNote{value})
                     .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
             }
         }
