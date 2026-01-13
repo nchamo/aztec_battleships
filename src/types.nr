@@ -1,22 +1,15 @@
 use dep::aztec::{macros::notes::note, protocol_types::traits::{Packable, Serialize, Deserialize, ToField}};
 
-
 // Constants
 pub global BOARD_SIZE: u8 = 10;
 pub global SHIP_SIZES: [u8; 5] = [5, 4, 3, 3, 2]; // carrier, battleship, cruiser, submarine, destroyer
 pub global TOTAL_SHIP_CELLS: u8 = 17;
-pub global SETUP_TIMEOUT: u64 = 3600; // 1 hour
 pub global TURN_TIMEOUT: u64 = 86400; // 24 hours
 
 // Game statuses
 pub global STATUS_CREATED: u8 = 0;  // Game created, waiting for both players to place ships
 pub global STATUS_ACTIVE: u8 = 1;   // Both players placed ships, game in progress
 pub global STATUS_COMPLETED: u8 = 2; // Game finished
-
-// Win types
-pub global WIN_NONE: u8 = 0;
-pub global WIN_VICTORY: u8 = 1;
-pub global WIN_ABANDONMENT: u8 = 2;
 
 // Game identifier struct
 #[derive(Serialize, Deserialize)]
@@ -39,23 +32,14 @@ impl ToField for GameId {
 // Type alias for coordinates (cleaner map keys)
 pub type Coordinate = Field;
 
-// Type alias for timestamps
-pub type Timestamp = u64;
-
-// Type alias for shot status tracking
-pub type ShotStatus = u8;
-
-// Shot status values
-pub global SHOT_STATUS_NONE: u8 = 0;
-pub global SHOT_STATUS_MISS: u8 = 1;
-pub global SHOT_STATUS_HIT: u8 = 2;
-
-// Player roles
-pub global ROLE_HOST: u8 = 0;
-pub global ROLE_GUEST: u8 = 1;
+#[derive(Packable, Serialize, Deserialize)]
+#[note]
+pub struct ShotNote {
+    pub shot: Shot,
+}
 
 // Shot coordinates
-#[derive(Serialize, Deserialize)]
+#[derive(Packable, Serialize, Deserialize)]
 pub struct Shot {
     pub x: u8,
     pub y: u8,
@@ -103,59 +87,6 @@ pub struct ShipPlacement {
     pub destroyer: ShipData,   // 2 cells
 }
 
-// impl ShipPlacement {
-//     pub fn new(
-//         carrier: ShipData,
-//         battleship: ShipData,
-//         cruiser: ShipData,
-//         submarine: ShipData,
-//         destroyer: ShipData
-//     ) -> Self {
-//         Self {
-//             carrier,
-//             battleship,
-//             cruiser,
-//             submarine,
-//             destroyer
-//         }
-//     }
-// }
-
-// impl Serialize<5> for ShipPlacement {
-//     fn serialize(self) -> [Field; 5] {
-//         [
-//             self.carrier.pack(),
-//             self.battleship.pack(),
-//             self.cruiser.pack(),
-//             self.submarine.pack(),
-//             self.destroyer.pack(),
-//         ]
-//     }
-// }
-
-// impl Deserialize<5> for ShipPlacement {
-//     fn deserialize(fields: [Field; 5]) -> Self {
-//         Self {
-//             carrier: ShipData::unpack(fields[0]),
-//             battleship: ShipData::unpack(fields[1]),
-//             cruiser: ShipData::unpack(fields[2]),
-//             submarine: ShipData::unpack(fields[3]),
-//             destroyer: ShipData::unpack(fields[4]),
-//         }
-//     }
-// }
-
-// impl Packable for ShipPlacement {
-//     fn pack(self) -> [Field; 5] {
-//         self.serialize()
-//     }
-
-//     fn unpack(fields: [Field; 5]) -> Self {
-//         Self::deserialize(fields)
-//     }
-// }
-
-
 // Public game state - visible to all
 #[derive(Serialize, Deserialize, Packable)]
 pub struct PublicGameState {
@@ -173,29 +104,3 @@ impl PublicGameState {
         }
     }
 }
-
-// impl Serialize for PublicGameState {
-//     fn serialize(self) -> [Field; 3] {
-//         [self.host, self.turn as Field, self.status as Field]
-//     }
-// }
-
-// impl Deserialize for PublicGameState {
-//     fn deserialize(fields: [Field; 3]) -> Self {
-//         Self {
-//             host: fields[0],
-//             turn: fields[1] as u8,
-//             status: fields[2] as u8,
-//         }
-//     }
-// }
-
-// impl Packable for PublicGameState {
-//     fn pack(self) -> [Field; 3] {
-//         self.serialize()
-//     }
-
-//     fn unpack(fields: [Field; 3]) -> Self {
-//         Self::deserialize(fields)
-//     }
-// }
