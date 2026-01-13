@@ -59,24 +59,6 @@ pub struct ShipData {
     pub orientation: u8, // 0=horizontal, 1=vertical
 }
 
-// impl ShipData {
-//     pub fn new(x: u8, y: u8, orientation: u8) -> Self {
-//         Self { x, y, orientation }
-//     }
-
-//     pub fn pack(self) -> Field {
-//         (self.x as Field) + (self.y as Field) * 256 + (self.orientation as Field) * 65536
-//     }
-
-//     pub fn unpack(packed: Field) -> Self {
-//         let packed_u32 = packed as u32;
-//         let x = (packed_u32 % 256) as u8;
-//         let y = ((packed_u32 / 256) % 256) as u8;
-//         let orientation = ((packed_u32 / 65536) % 256) as u8;
-//         Self { x, y, orientation }
-//     }
-// }
-
 // Ship placement for a player - all 5 ships
 #[derive(Packable, Serialize, Deserialize)]
 pub struct ShipPlacement {
@@ -102,5 +84,44 @@ impl PublicGameState {
             turn: 0,
             status: STATUS_CREATED,
         }
+    }
+}
+
+// Board storage with custom tight packing (100 bools -> 1 Field)
+#[derive(Serialize, Deserialize)]
+#[note]
+pub struct BoardNote {
+    pub board: [bool; 100],  // 10x10 board, true = ship cell, false = empty
+}
+
+impl Packable for BoardNote {
+    let N: u32 = 1;  // Only 1 Field needed
+
+    #[inline_always]
+    fn pack(self) -> [Field; Self::N] {
+        let mut packed: u128 = 0;
+
+        // Pack all 100 bools into single u128
+        for i in 0..100 {
+            if self.board[i as u32] {
+                packed = packed | ((1 as u128) << (i as u128));
+            }
+        }
+
+        [packed as Field]
+    }
+
+    #[inline_always]
+    fn unpack(fields: [Field; Self::N]) -> Self {
+        let mut board: [bool; 100] = [false; 100];
+        let packed: u128 = fields[0] as u128;
+
+        // Unpack all 100 bools from single u128
+        for i in 0..100 {
+            let mask = (1 as u128) << (i as u128);
+            board[i as u32] = (packed & mask) != 0;
+        }
+
+        Self { board }
     }
 }

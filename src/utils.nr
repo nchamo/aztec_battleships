@@ -1,4 +1,4 @@
-use crate::types::{ShipData, ShipPlacement, BOARD_SIZE, SHIP_SIZES};
+use crate::types::{ShipData, ShipPlacement, Shot, BOARD_SIZE, SHIP_SIZES};
 
 // Expand a ship to its cell coordinates
 pub fn expand_ship(ship: ShipData, length: u8) -> [(u8, u8); 5] {
@@ -82,6 +82,12 @@ pub fn validate_ships(ships: ShipPlacement) {
     assert(!cells_intersect(cruiser_cells, SHIP_SIZES[2], submarine_cells, SHIP_SIZES[3]), "Cruiser and submarine overlap");
     assert(!cells_intersect(cruiser_cells, SHIP_SIZES[2], destroyer_cells, SHIP_SIZES[4]), "Cruiser and destroyer overlap");
     assert(!cells_intersect(submarine_cells, SHIP_SIZES[3], destroyer_cells, SHIP_SIZES[4]), "Submarine and destroyer overlap");
+}
+
+// Validate a shot is within board bounds
+pub fn validate_shot(shot: Shot) {
+    assert(shot.x < BOARD_SIZE, "Shot x out of bounds");
+    assert(shot.y < BOARD_SIZE, "Shot y out of bounds");
 }
 
 // Check if a shot hits any ship
