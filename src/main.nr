@@ -62,6 +62,7 @@ contract Battleships {
         validate_ships(ships);
 
         let host = self.context.msg_sender().unwrap();
+        let timestamp = self.context.get_anchor_block_header().global_variables.timestamp;
 
         // Initialize my counter
         self.storage.private_hit_counter
@@ -70,20 +71,32 @@ contract Battleships {
             .initialize(UintNote { value: 0 })
             .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
 
+        // Initialize my last action timestamp
+        self.storage.private_last_action_timestamp
+            .at(game_id)
+            .at(host)
+            .initialize(UintNote{ value: timestamp as u128 })
+            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+
+        // Initialize last opponent shot with dummy value (no shot yet)
+        self.storage.private_last_opponent_shot
+            .at(game_id)
+            .at(host)
+            .initialize(ShotNote { shot: Shot { x: 0, y: 0 } })
+            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+
         // Store ship placement coordinates
-        self.internal.store_ship_placement(game_id, ships, host);
+        // self.internal.store_ship_placement(game_id, ships, host);
 
         // Call public function to update game status
         Battleships::at(self.context.this_address())
-            .on_game_created(game_id)
+            .on_game_created(game_id, host)
             .enqueue(self.context);
     }
 
     #[external("public")]
     #[only_self]
-    fn on_game_created(game_id: GameId) {
-        let host = self.context.msg_sender().unwrap();
-
+    fn on_game_created(game_id: GameId, host: AztecAddress) {
         // Initialize game state
         let game_state = PublicGameState::new(host.to_field());
 
@@ -123,15 +136,36 @@ contract Battleships {
             .at(game_id)
             .at(guest)
             .initialize(UintNote { value: 0 })
-            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);    
+            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
 
-        // Update last action timestamp for opponent 
+        // Initialize my last action timestamp
+        self.storage.private_last_action_timestamp
+            .at(game_id)
+            .at(guest)
+            .initialize(UintNote{ value: timestamp as u128 })
+            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+
+        // Initialize last opponent shot with dummy value (no shot yet)
+        self.storage.private_last_opponent_shot
+            .at(game_id)
+            .at(guest)
+            .initialize(ShotNote { shot: Shot { x: 0, y: 0 } })
+            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+
+        // Update last action timestamp for opponent
         // We do this so that they can't declare abandonment immediately after joined
         self.storage.private_last_action_timestamp
             .at(game_id)
             .at(opponent)
             .initialize(UintNote{ value: timestamp as u128 })
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);        
+            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+
+        // Set opponent's opponent to be me (guest)
+        self.storage.private_opponent
+            .at(game_id)
+            .at(opponent)
+            .initialize(AddressNote{ address: guest })
+            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // Apply shot
         self.internal.apply_my_shot(game_id, initial_shot);
@@ -230,40 +264,44 @@ contract Battleships {
             .get_note()
             .get_note()
             .shot;
-        
 
-        
-        // Check if opponent hit any of my ships
-        let shot_x = opponent_shot.x as Field;
-        let shot_y = opponent_shot.y as Field;
-
-        let ship_at_position = self.storage.private_my_ships_placement
-            .at(game_id)
-            .at(shot_x)
-            .at(shot_y)
-            .at(player)
-            .get_note();
-
-        let is_hit = ship_at_position.value == 1;
         let mut lost = false;
-        if is_hit {
-            // Read counter
-            let counter: u128 = self.storage.private_hit_counter
-                .at(game_id)
-                .at(player)
-                .get_note()
-                .get_note()
-                .value;
-                
 
-            if (counter == (TOTAL_SHIP_CELLS as u128) - 1) {
-                lost = true;
-            } else {
-                self.storage.private_hit_counter
+        // If shot is (0,0), opponent hasn't shot yet (dummy initial value) - skip verification
+        let has_shot = (opponent_shot.x != 0) | (opponent_shot.y != 0);
+
+        if has_shot {
+            // Check if opponent hit any of my ships
+            let shot_x = opponent_shot.x as Field;
+            let shot_y = opponent_shot.y as Field;
+
+            let ship_at_position = self.storage.private_my_ships_placement
                 .at(game_id)
+                .at(shot_x)
+                .at(shot_y)
                 .at(player)
-                .replace(|current| UintNote { value: current.value + 1 })
-                .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+                .get_note();
+
+            let is_hit = ship_at_position.value == 1;
+
+            if is_hit {
+                // Read counter
+                let counter: u128 = self.storage.private_hit_counter
+                    .at(game_id)
+                    .at(player)
+                    .get_note()
+                    .get_note()
+                    .value;
+
+                if (counter == (TOTAL_SHIP_CELLS as u128) - 1) {
+                    lost = true;
+                } else {
+                    self.storage.private_hit_counter
+                    .at(game_id)
+                    .at(player)
+                    .replace(|current| UintNote { value: current.value + 1 })
+                    .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+                }
             }
         }
 
@@ -289,14 +327,14 @@ contract Battleships {
         self.storage.private_last_action_timestamp
             .at(game_id)
             .at(player)
-            .initialize_or_replace(|_| UintNote{ value: timestamp as u128 })
+            .replace(|_| UintNote{ value: timestamp as u128 })
             .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
 
         // "Send" shot to opponent
         self.storage.private_last_opponent_shot
             .at(game_id)
             .at(opponent)
-            .initialize_or_replace(|_|ShotNote { shot })
+            .replace(|_| ShotNote { shot })
             .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);                
     }
    
@@ -346,6 +384,9 @@ contract Battleships {
         ships: ShipPlacement,
         owner: AztecAddress
     ) {
+        // Build a grid marking which positions have ships
+        let mut board: [[u128; 10]; 10] = [[0; 10]; 10];
+
         // Expand all ships to their cell coordinates
         let carrier_cells = crate::utils::expand_ship(ships.carrier, crate::types::SHIP_SIZES[0]);
         let battleship_cells = crate::utils::expand_ship(ships.battleship, crate::types::SHIP_SIZES[1]);
@@ -353,58 +394,49 @@ contract Battleships {
         let submarine_cells = crate::utils::expand_ship(ships.submarine, crate::types::SHIP_SIZES[3]);
         let destroyer_cells = crate::utils::expand_ship(ships.destroyer, crate::types::SHIP_SIZES[4]);
 
-        // Initialize all board positions
+        // Mark carrier cells
+        for i in 0..5 {
+            if (i as u8) < crate::types::SHIP_SIZES[0] {
+                board[carrier_cells[i].0 as u32][carrier_cells[i].1 as u32] = 1;
+            }
+        }
+
+        // Mark battleship cells
+        for i in 0..5 {
+            if (i as u8) < crate::types::SHIP_SIZES[1] {
+                board[battleship_cells[i].0 as u32][battleship_cells[i].1 as u32] = 1;
+            }
+        }
+
+        // Mark cruiser cells
+        for i in 0..5 {
+            if (i as u8) < crate::types::SHIP_SIZES[2] {
+                board[cruiser_cells[i].0 as u32][cruiser_cells[i].1 as u32] = 1;
+            }
+        }
+
+        // Mark submarine cells
+        for i in 0..5 {
+            if (i as u8) < crate::types::SHIP_SIZES[3] {
+                board[submarine_cells[i].0 as u32][submarine_cells[i].1 as u32] = 1;
+            }
+        }
+
+        // Mark destroyer cells
+        for i in 0..5 {
+            if (i as u8) < crate::types::SHIP_SIZES[4] {
+                board[destroyer_cells[i].0 as u32][destroyer_cells[i].1 as u32] = 1;
+            }
+        }
+
+        // Now initialize all board positions from the precomputed grid
         for x in 0..BOARD_SIZE {
             for y in 0..BOARD_SIZE {
-                let x_u8 = x as u8;
-                let y_u8 = y as u8;
-                let x_field = x as Field;
-                let y_field = y as Field;
-
-                // Check if this position has a ship
-                let mut has_ship = false;
-
-                // Check carrier
-                for i in 0..5 {
-                    if ((i as u8) < crate::types::SHIP_SIZES[0]) & (carrier_cells[i].0 == x_u8) & (carrier_cells[i].1 == y_u8) {
-                        has_ship = true;
-                    }
-                }
-
-                // Check battleship
-                for i in 0..5 {
-                    if ((i as u8) < crate::types::SHIP_SIZES[1]) & (battleship_cells[i].0 == x_u8) & (battleship_cells[i].1 == y_u8) {
-                        has_ship = true;
-                    }
-                }
-
-                // Check cruiser
-                for i in 0..5 {
-                    if ((i as u8) < crate::types::SHIP_SIZES[2]) & (cruiser_cells[i].0 == x_u8) & (cruiser_cells[i].1 == y_u8) {
-                        has_ship = true;
-                    }
-                }
-
-                // Check submarine
-                for i in 0..5 {
-                    if ((i as u8) < crate::types::SHIP_SIZES[3]) & (submarine_cells[i].0 == x_u8) & (submarine_cells[i].1 == y_u8) {
-                        has_ship = true;
-                    }
-                }
-
-                // Check destroyer
-                for i in 0..5 {
-                    if ((i as u8) < crate::types::SHIP_SIZES[4]) & (destroyer_cells[i].0 == x_u8) & (destroyer_cells[i].1 == y_u8) {
-                        has_ship = true;
-                    }
-                }
-
-                // Initialize with 1 if ship, 0 if empty
-                let value = if has_ship { 1 } else { 0 };
+                let value = board[x as u32][y as u32];
                 self.storage.private_my_ships_placement
                     .at(game_id)
-                    .at(x_field)
-                    .at(y_field)
+                    .at(x as Field)
+                    .at(y as Field)
                     .at(owner)
                     .initialize(UintNote{value})
                     .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
