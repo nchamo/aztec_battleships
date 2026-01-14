@@ -12,6 +12,7 @@ mod utils;
 
     Questions:
     - If I'm using anchor block, can I use a very old block to try to cause abandonment?
+    - If I dont use CONSTRAINED_ONCHAIN for stuff I only need to store for myself, it doesnt find the note
 
 */
 
@@ -63,7 +64,7 @@ contract Battleships {
             .at(game_id)
             .at(host)
             .initialize(UintNote { value: 0 })
-            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // Validate ships and build board
         let board = crate::utils::validate_and_build_board(ships);
@@ -71,7 +72,7 @@ contract Battleships {
             .at(game_id)
             .at(host)
             .initialize(BoardNote { board })
-            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // Call public function to update game status
         Battleships::at(self.context.this_address())
@@ -108,7 +109,7 @@ contract Battleships {
             .at(game_id)
             .at(guest)
             .initialize(UintNote { value: 0 })
-            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // Validate ships and build board
         let board = crate::utils::validate_and_build_board(ships);
@@ -116,14 +117,14 @@ contract Battleships {
             .at(game_id)
             .at(guest)
             .initialize(BoardNote { board })
-            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // Store opponent address
         self.storage.private_opponent
             .at(game_id)
             .at(guest)
             .initialize(AddressNote{ address: opponent })
-            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // Update last action timestamp for opponent
         // We do this so that they can't declare abandonment immediately after joined
@@ -170,7 +171,6 @@ contract Battleships {
     // ============================================================================
     // SHOOTING
     // ============================================================================
-
     #[external("private")]
     fn shoot(
         game_id: GameId,
@@ -265,7 +265,7 @@ contract Battleships {
                 .at(game_id)
                 .at(player)
                 .replace(|current| UintNote { value: current.value + 1 })
-                .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+                .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
             }
         }
 
@@ -292,7 +292,7 @@ contract Battleships {
             .at(game_id)
             .at(player)
             .initialize_or_replace(|_| UintNote{ value: timestamp as u128 })
-            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
         // "Send" shot to opponent
         self.storage.private_last_opponent_shot
