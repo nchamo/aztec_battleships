@@ -9,7 +9,8 @@ pub global TURN_TIMEOUT: u64 = 86400; // 24 hours
 // Game statuses
 pub global STATUS_CREATED: u8 = 0;  // Game created, waiting for both players to place ships
 pub global STATUS_ACTIVE: u8 = 1;   // Both players placed ships, game in progress
-pub global STATUS_COMPLETED: u8 = 2; // Game finished
+pub global STATUS_WON_BY_HOST: u8 = 2; // Game finished
+pub global STATUS_WON_BY_GUEST: u8 = 3; // Game finished
 
 // Game identifier struct
 #[derive(Serialize, Deserialize)]
@@ -51,6 +52,22 @@ impl Shot {
     }
 }
 
+// Player's own last action - used to track when they last acted
+#[derive(Packable, Serialize, Deserialize)]
+#[note]
+pub struct PlayerActionNote {
+    pub turn: u8,        // Which turn this action was taken
+    pub timestamp: u64,     // When this action was taken
+}
+
+// Opponent's last action - includes their shot
+#[derive(Packable, Serialize, Deserialize)]
+#[note]
+pub struct OpponentActionNote {
+    pub turn: u8,        // Which turn the opponent took this action
+    pub shot: Shot,         // The shot the opponent took
+}
+
 // Ship data - position and orientation
 #[derive(Packable, Serialize, Deserialize)]
 pub struct ShipData {
@@ -73,7 +90,6 @@ pub struct ShipPlacement {
 #[derive(Serialize, Deserialize, Packable)]
 pub struct PublicGameState {
     pub host: Field,     // Host player address
-    pub turn: u8,        // Turn number (0 = host's turn, 1 = guest's turn, etc.)
     pub status: u8,      // Current game status
 }
 
@@ -81,7 +97,6 @@ impl PublicGameState {
     pub fn new(host: Field) -> Self {
         Self {
             host,
-            turn: 0,
             status: STATUS_CREATED,
         }
     }
