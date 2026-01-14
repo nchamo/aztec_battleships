@@ -29,7 +29,6 @@ contract Battleships {
         TOTAL_SHIP_CELLS, TURN_TIMEOUT,
         STATUS_CREATED, STATUS_ACTIVE, STATUS_COMPLETED,
     };
-    use crate::utils::validate_ships;
     use uint_note::uint_note::UintNote;
     use address_note::address_note::AddressNote;
 
@@ -57,8 +56,6 @@ contract Battleships {
         game_id: GameId,
         ships: ShipPlacement
     ) {
-        validate_ships(ships);
-
         let host = self.context.msg_sender().unwrap();
 
         // Initialize my counter
@@ -68,8 +65,8 @@ contract Battleships {
             .initialize(UintNote { value: 0 })
             .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
 
-        // Build and store board as single note
-        let board = self.internal.build_board(ships);
+        // Validate ships and build board
+        let board = crate::utils::validate_and_build_board(ships);
         self.storage.private_board
             .at(game_id)
             .at(host)
@@ -100,16 +97,21 @@ contract Battleships {
         ships: ShipPlacement,
         initial_shot: Shot
     ) {
-        validate_ships(ships);
-
         // Validate shot
         crate::utils::validate_shot(initial_shot);
 
         let guest = self.context.msg_sender().unwrap();
         let timestamp = self.context.get_anchor_block_header().global_variables.timestamp;
 
-        // Build and store board as single note
-        let board = self.internal.build_board(ships);
+        // Initialize counter
+        self.storage.private_hit_counter
+            .at(game_id)
+            .at(guest)
+            .initialize(UintNote { value: 0 })
+            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
+
+        // Validate ships and build board
+        let board = crate::utils::validate_and_build_board(ships);
         self.storage.private_board
             .at(game_id)
             .at(guest)
@@ -121,13 +123,6 @@ contract Battleships {
             .at(game_id)
             .at(guest)
             .initialize(AddressNote{ address: opponent })
-            .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
-
-        // Initialize counter
-        self.storage.private_hit_counter
-            .at(game_id)
-            .at(guest)
-            .initialize(UintNote { value: 0 })
             .deliver(MessageDelivery.UNCONSTRAINED_OFFCHAIN);
 
         // Update last action timestamp for opponent
@@ -188,7 +183,7 @@ contract Battleships {
         let did_i_lose = self.internal.verify_opponents_shot(game_id);
 
         if (did_i_lose) {
-            // Call public function to increment turn
+            // Call public function to process loss
             Battleships::at(self.context.this_address())
                 .on_lost(game_id)
                 .enqueue(self.context);
@@ -251,7 +246,7 @@ contract Battleships {
             .get_note()
             .board;
 
-        let idx = (opponent_shot.x as u32) * 10 + (opponent_shot.y as u32);
+        let idx = (opponent_shot.y as u32) * 10 + (opponent_shot.x as u32);
         let is_hit = my_board[idx];
 
         if is_hit {
@@ -347,59 +342,6 @@ contract Battleships {
     // ============================================================================
     // HELPERS
     // ============================================================================
-    #[internal("private")]
-    fn build_board(ships: ShipPlacement) -> [bool; 100] {
-        let mut board: [bool; 100] = [false; 100];
-
-        // Expand all ships to their cell coordinates
-        let carrier_cells = crate::utils::expand_ship(ships.carrier, crate::types::SHIP_SIZES[0]);
-        let battleship_cells = crate::utils::expand_ship(ships.battleship, crate::types::SHIP_SIZES[1]);
-        let cruiser_cells = crate::utils::expand_ship(ships.cruiser, crate::types::SHIP_SIZES[2]);
-        let submarine_cells = crate::utils::expand_ship(ships.submarine, crate::types::SHIP_SIZES[3]);
-        let destroyer_cells = crate::utils::expand_ship(ships.destroyer, crate::types::SHIP_SIZES[4]);
-
-        // Mark carrier cells
-        for i in 0..5 {
-            if (i as u8) < crate::types::SHIP_SIZES[0] {
-                let idx = (carrier_cells[i].0 as u32) * 10 + (carrier_cells[i].1 as u32);
-                board[idx] = true;
-            }
-        }
-
-        // Mark battleship cells
-        for i in 0..5 {
-            if (i as u8) < crate::types::SHIP_SIZES[1] {
-                let idx = (battleship_cells[i].0 as u32) * 10 + (battleship_cells[i].1 as u32);
-                board[idx] = true;
-            }
-        }
-
-        // Mark cruiser cells
-        for i in 0..5 {
-            if (i as u8) < crate::types::SHIP_SIZES[2] {
-                let idx = (cruiser_cells[i].0 as u32) * 10 + (cruiser_cells[i].1 as u32);
-                board[idx] = true;
-            }
-        }
-
-        // Mark submarine cells
-        for i in 0..5 {
-            if (i as u8) < crate::types::SHIP_SIZES[3] {
-                let idx = (submarine_cells[i].0 as u32) * 10 + (submarine_cells[i].1 as u32);
-                board[idx] = true;
-            }
-        }
-
-        // Mark destroyer cells
-        for i in 0..5 {
-            if (i as u8) < crate::types::SHIP_SIZES[4] {
-                let idx = (destroyer_cells[i].0 as u32) * 10 + (destroyer_cells[i].1 as u32);
-                board[idx] = true;
-            }
-        }
-
-        board
-    }    
 
     #[internal("public")]
     fn check_correct_turn(game_state: PublicGameState, should_be_my_turn: bool) {
@@ -414,6 +356,6 @@ contract Battleships {
         let is_my_turn = is_host_turn == is_sender_host;
         assert(should_be_my_turn == is_my_turn, "Incorrect");
     }
-
-
 }
+
+mod test;
