@@ -1,5 +1,63 @@
 use crate::types::{ShipData, ShipPlacement};
 
+// Calculate all cells occupied by a ship placement
+pub fn get_ship_cells(placement: ShipPlacement) -> [(u8, u8); 17] {
+    let mut cells: [(u8, u8); 17] = [(0, 0); 17];
+    let mut index = 0;
+
+    // Carrier (5 cells)
+    for i in 0..5 {
+        if placement.carrier.orientation == 0 {
+            cells[index] = (placement.carrier.x + i, placement.carrier.y);
+        } else {
+            cells[index] = (placement.carrier.x, placement.carrier.y + i);
+        }
+        index += 1;
+    }
+
+    // Battleship (4 cells)
+    for i in 0..4 {
+        if placement.battleship.orientation == 0 {
+            cells[index] = (placement.battleship.x + i, placement.battleship.y);
+        } else {
+            cells[index] = (placement.battleship.x, placement.battleship.y + i);
+        }
+        index += 1;
+    }
+
+    // Cruiser (3 cells)
+    for i in 0..3 {
+        if placement.cruiser.orientation == 0 {
+            cells[index] = (placement.cruiser.x + i, placement.cruiser.y);
+        } else {
+            cells[index] = (placement.cruiser.x, placement.cruiser.y + i);
+        }
+        index += 1;
+    }
+
+    // Submarine (3 cells)
+    for i in 0..3 {
+        if placement.submarine.orientation == 0 {
+            cells[index] = (placement.submarine.x + i, placement.submarine.y);
+        } else {
+            cells[index] = (placement.submarine.x, placement.submarine.y + i);
+        }
+        index += 1;
+    }
+
+    // Destroyer (2 cells)
+    for i in 0..2 {
+        if placement.destroyer.orientation == 0 {
+            cells[index] = (placement.destroyer.x + i, placement.destroyer.y);
+        } else {
+            cells[index] = (placement.destroyer.x, placement.destroyer.y + i);
+        }
+        index += 1;
+    }
+
+    cells
+}
+
 // Create valid non-overlapping ship placement
 pub fn create_valid_ships() -> ShipPlacement {
     ShipPlacement {

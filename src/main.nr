@@ -22,14 +22,12 @@ contract Battleships {
     use uint_note::uint_note::UintNote;
     use address_note::address_note::AddressNote;    
 
-    pub global DOM_SEP__NOTE_HASH: u32 = 1;
-
     #[storage]
     struct Storage<Context> {
         // PUBLIC
+        public_game_status: Map<GameId, PublicMutable<u8, Context>, Context>,
         // Note: we'll make this immutable so that we can read it privately
         public_game_hosts: Map<GameId, PublicImmutable<AztecAddress, Context>, Context>,
-        public_game_status: Map<GameId, PublicMutable<u8, Context>, Context>,
 
         // PRIVATE        
         private_board: Map<GameId, Owned<PrivateImmutable<BoardNote, Context>, Context>, Context>,
@@ -138,7 +136,7 @@ contract Battleships {
     #[external("public")]
     #[only_self]
     fn on_game_joined(game_id: GameId) {
-        let mut game_status = self.storage.public_game_status
+        let game_status = self.storage.public_game_status
             .at(game_id)
             .read();
 
@@ -200,7 +198,7 @@ contract Battleships {
     #[external("public")]
     #[only_self]
     fn on_shoot(game_id: GameId) {
-        let mut game_status = self.storage.public_game_status
+        let game_status = self.storage.public_game_status
             .at(game_id)
             .read();
 
@@ -211,7 +209,7 @@ contract Battleships {
     #[external("public")]
     #[only_self]
     fn on_finished(game_id: GameId, end_status: u8) {
-        let mut game_status = self.storage.public_game_status
+        let game_status = self.storage.public_game_status
             .at(game_id)
             .read();
 
@@ -228,45 +226,31 @@ contract Battleships {
     fn verify_opponents_shot(game_id: GameId, opponent_shot: Shot) -> bool {
         let player = self.context.msg_sender().unwrap();
 
-        let mut lost = false;
-
         // Check if opponent hit any of my ships
         let my_board = self.storage.private_board
             .at(game_id)
             .at(player)
             .get_note()
             .board;
-
         let idx = (opponent_shot.y as u32) * 10 + (opponent_shot.x as u32);
         let is_hit = my_board[idx];
 
+        let lost = &mut false; 
         if is_hit {
-            // Read counter
-            let counter_message = self.storage.private_hit_counter
+            // Read & update counter
+            self.storage.private_hit_counter
                 .at(game_id)
                 .at(player)
-                .get_note();
-
-            let counter = counter_message
-                .get_note()
-                .value;
-            
-            counter_message.deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
-
-            aztec::oracle::debug_log::debug_log_format("Counter: {}", [counter as Field]);
-
-            if (counter == (TOTAL_SHIP_CELLS as u128) - 1) {
-                lost = true;
-            } else {
-                self.storage.private_hit_counter
-                .at(game_id)
-                .at(player)
-                .replace(|current| UintNote { value: current.value + 1 })
+                .replace(|current| {
+                    *lost = current.value == (TOTAL_SHIP_CELLS as u128) - 1;
+                    
+                    let new_note = UintNote { value: current.value + 1 };
+                    new_note
+                })
                 .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
-            }
         }
 
-        lost
+        *lost
     }    
 
     #[internal("private")]
@@ -340,7 +324,7 @@ contract Battleships {
     fn build_nullifier(game_id: GameId, turn: Turn) -> Field {
         let hash = poseidon2_hash_with_separator(
             [game_id.to_field(), turn as Field],
-            DOM_SEP__NOTE_HASH as Field,
+            1,
         );
 
         hash
@@ -356,16 +340,6 @@ contract Battleships {
             .at(game_id)
             .read()
     }
-
-    #[external("utility")]
-    unconstrained fn get_hit_counter(game_id: GameId, player: AztecAddress) -> u128 {
-        self.storage.private_hit_counter
-            .at(game_id)
-            .at(player)
-            .view_note()
-            .value
-    }
-
 }
 
 mod test;

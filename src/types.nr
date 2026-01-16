@@ -77,22 +77,6 @@ pub struct ShipPlacement {
     pub destroyer: ShipData,   // 2 cells
 }
 
-// Public game state - visible to all
-#[derive(Serialize, Deserialize, Packable)]
-pub struct PublicGameState {
-    pub host: Field,     // Host player address
-    pub status: u8,      // Current game status
-}
-
-impl PublicGameState {
-    pub fn new(host: Field) -> Self {
-        Self {
-            host,
-            status: STATUS_CREATED,
-        }
-    }
-}
-
 // Board storage with custom tight packing (100 bools -> 1 Field)
 #[derive(Serialize, Deserialize, Eq)]
 #[note]

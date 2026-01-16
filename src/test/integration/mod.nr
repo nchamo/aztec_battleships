@@ -1,2 +1,2 @@
-mod happy_path;
-mod unhappy_path;
+mod success;
+mod failures;

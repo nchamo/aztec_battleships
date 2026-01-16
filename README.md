@@ -41,111 +41,55 @@ battleships/
 ├── src/
 │   ├── main.nr          # Main contract with game functions
 │   ├── types.nr         # Data structures and constants
-│   └── utils.nr         # Ship validation and hit detection
+│   ├── utils.nr         # Ship validation and hit detection
+│   └── test/            # Test suite
+│       ├── helpers.nr   # Test helper functions
+│       ├── types_test.nr        # Unit tests for types
+│       ├── utils_test.nr        # Unit tests for utils
+│       └── integration/ # Integration tests
+│           ├── success/         # Successful game scenarios (5 tests)
+│           └── failures/        # Error & validation tests (13 tests)
 ├── Nargo.toml           # Noir project configuration
 ├── README.md            # This file
-└── IMPLEMENTATION_GUIDE.md  # Full Aztec implementation guide
 ```
 
-## Files
+## Installation
 
-### `src/types.nr`
-- **ShipData**: Position (x, y) and orientation (horizontal/vertical)
-- **ShipPlacement**: All 5 ships + salt for commitment
-- **BoardState**: Tracks hits received and shots made
-- **PublicGameState**: Turn coordination and game status
-- **Constants**: Board size (10x10), ship sizes, timeouts
+### Prerequisites
+- Aztec development environment
 
-### `src/utils.nr`
-- `expand_ship()`: Convert ship to cell coordinates
-- `cells_intersect()`: Check if ships overlap
-- `validate_ships()`: Validate all ships (bounds, sizes, no overlap)
-- `check_hit()`: Determine if shot hits any ship
-
-### `src/main.nr`
-Core game functions:
-- `create_game(game_id)`: Create game with specific ID
-- `join_game(game_id)`: Join existing game
-- `place_ships(...)`: Place ships privately
-- `shoot(game_id, opponent, x, y)`: Fire at opponent
-- `verify_shot(...)`: Check if shot hits your ships
-- `process_result(...)`: Update tracking board with result
-- `claim_victory(game_id)`: Claim win after 17 hits
-- `claim_abandonment(...)`: Win via timeout
-
-## Current Status
-
-The contract **compiles successfully** and includes:
-- ✅ All game logic
-- ✅ Ship validation (prevents overlaps, enforces rules)
-- ✅ Hit detection
-- ✅ Victory conditions
-- ✅ Timeout mechanisms
-
-**To add Aztec privacy features**, see `IMPLEMENTATION_GUIDE.md` for:
-- Private/public storage setup
-- Note-based messaging between players
-- Function attributes (`#[aztec(private)]`, `#[aztec(public)]`)
-- Complete code examples
-
-## Key Design Decisions
-
-### 1. Simple Game IDs
-Game IDs are just numbers (1, 2, 3...). Users provide them when creating/joining games. This allows:
-- Anyone can join a created game if they know the ID
-- No need for complex ID generation
-- Easy to remember and share
-
-### 2. Automatic Proof Generation
-Aztec automatically generates zero-knowledge proofs for private functions. You don't need to:
-- Manually create circuits
-- Write proof generation code
-- Handle proof verification
-
-Just mark functions with `#[aztec(private)]` and Aztec handles it.
-
-### 3. Note-Based Messaging
-Instead of events, use Aztec's note system:
-- Send notes to specific addresses (encrypted)
-- Recipient queries and decrypts their notes
-- Notes consumed after reading
-- Fully private communication
-
-## Building
-
+### Setup
+1. Install Aztec CLI (if not already installed):
 ```bash
-# Compile contract
-nargo compile
-
-# Run tests (when tests added)
-nargo test
+bash -i <(curl -s https://install.aztec.network)
 ```
 
-## Adding Aztec Features
+2. The Aztec binaries will be available at `~/.aztec/bin/`
 
-See `IMPLEMENTATION_GUIDE.md` for complete guide on adding:
-1. Storage declarations (private and public)
-2. Custom notes for messaging
-3. Aztec function attributes
-4. Note encryption/decryption
-5. Private → public function calls
+3. Clone this repository:
+```bash
+git clone <repository-url>
+cd battleships
+```
 
-## Privacy Model
+## Building & Testing
 
-**What Remains Private:**
-- Ship positions (never revealed)
-- Shot coordinates (only players know)
-- Hit/miss results (only players know)
-- Board state (only owner knows)
+### Compile the Contract
+```bash
+aztec compile
+```
 
-**What is Public:**
-- Game exists between two addresses
-- Current turn number
-- Whose turn it is
-- Game status (created, active, completed)
-- Winner (after completion)
-- Timestamps (for timeouts)
+This generates the contract ABI and bytecode in the `target/` directory.
 
+### Run All Tests
+```bash
+aztec test
+```
+
+### Run Specific Test
+```bash
+aztec test test_name
+```
 ## Ship Configuration
 
 Standard battleships:
@@ -158,57 +102,6 @@ Standard battleships:
 
 Board: 10×10 grid (coordinates 0-9)
 
-## Timeouts
-
-- **Setup timeout**: 1 hour (3600 seconds) for ship placement
-- **Turn timeout**: 24 hours (86400 seconds) per turn
-- Either player can claim abandonment if opponent exceeds timeout
-
-## Example Game
-
-```
-Alice creates game 123:
-  createGame(123)
-
-Bob joins:
-  joinGame(123)
-
-Both place ships privately:
-  placeShips(123, carrier(0,0,horizontal), battleship(2,2,vertical), ...)
-
-Alice shoots:
-  shoot(123, bob_address, 5, 5)
-
-Bob verifies (private):
-  verifyShot(123, alice_address, 5, 5)
-  → Checks ships, sends result note back
-
-Alice processes result:
-  processResult(123, 5, 5, true)  // Hit!
-  → Updates tracking board
-
-...continue until 17 hits...
-
-Alice claims victory:
-  claimVictory(123)
-```
-
-## Development Notes
-
-- Built with Noir (zero-knowledge proving system)
-- Designed for Aztec (privacy-focused L2)
-- Pure Noir version compiles now
-- Aztec features require compatible library version
-- See IMPLEMENTATION_GUIDE.md for full Aztec integration
-
 ## License
 
 MIT
-
-## Contributing
-
-Contributions welcome! Key areas:
-- Testing suite
-- Aztec library integration
-- UI/UX frontend
-- Documentation improvements

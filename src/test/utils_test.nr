@@ -221,7 +221,7 @@ unconstrained fn test_validate_and_build_board_valid_ships() {
 #[test(should_fail_with = "Carrier and battleship overlap")]
 unconstrained fn test_validate_and_build_board_overlapping() {
     let ships = create_overlapping_ships();
-    validate_and_build_board(ships);  // Should fail with overlap error
+    let _ = validate_and_build_board(ships);  // Should fail with overlap error
 }
 
 #[test]
@@ -249,7 +249,7 @@ unconstrained fn test_validate_and_build_board_extends_past_edge() {
         submarine: ShipData { x: 0, y: 7, orientation: 0 },
         destroyer: ShipData { x: 0, y: 8, orientation: 0 },
     };
-    validate_and_build_board(ships);  // Should fail
+    let _ = validate_and_build_board(ships);  // Should fail
 }
 
 #[test]
