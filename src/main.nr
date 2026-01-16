@@ -4,47 +4,38 @@ use dep::aztec::macros::aztec;
 mod types;
 mod utils;
 
-/*
-    TODOs:
-    - Use nullifiers (or single claims) to avoid shooting twice the same coordinate
-    - Optimize storage variables
-
-    Questions:
-    - If I'm using anchor block, can I use a very old block to try to cause abandonment?
-    - If I dont use CONSTRAINED_ONCHAIN for stuff I only need to store for myself, it doesnt find the note
-
-*/
-
 #[aztec]
-contract Battleships {
+contract Battleships {    
     use aztec::{
         macros::{functions::{external, only_self, internal}, storage::storage},
-        protocol_types::{address::AztecAddress, traits::{ToField}},
+        protocol_types::{traits::ToField, address::AztecAddress, hash::poseidon2_hash_with_separator},
         messages::message_delivery::MessageDelivery,
-        state_vars::{Map, PrivateImmutable, PrivateMutable, PublicMutable, Owned},
+        state_vars::{Map, PrivateImmutable, PrivateMutable, PublicImmutable, PublicMutable, Owned, SingleUseClaim},
     };
 
     use crate::types::{
-        ShipPlacement, PublicGameState, GameId, Shot, BoardNote,
-        PlayerActionNote, OpponentActionNote,
+        ShipPlacement, GameId, Shot, BoardNote, Turn,
+        PlayedTurnNote, Coordinate,
         TOTAL_SHIP_CELLS, TURN_TIMEOUT,
         STATUS_CREATED, STATUS_ACTIVE, STATUS_WON_BY_HOST, STATUS_WON_BY_GUEST
     };
     use uint_note::uint_note::UintNote;
-    use address_note::address_note::AddressNote;
+    use address_note::address_note::AddressNote;    
+
+    pub global DOM_SEP__NOTE_HASH: u32 = 1;
 
     #[storage]
     struct Storage<Context> {
         // PUBLIC
-        public_games: Map<GameId, PublicMutable<PublicGameState, Context>, Context>,
+        // Note: we'll make this immutable so that we can read it privately
+        public_game_hosts: Map<GameId, PublicImmutable<AztecAddress, Context>, Context>,
+        public_game_status: Map<GameId, PublicMutable<u8, Context>, Context>,
 
-        // PRIVATE
-        // Immutable
+        // PRIVATE        
         private_board: Map<GameId, Owned<PrivateImmutable<BoardNote, Context>, Context>, Context>,
         private_opponent: Map<GameId, Owned<PrivateImmutable<AddressNote, Context>, Context>, Context>,
-        // Mutable
-        private_my_last_action: Map<GameId, Owned<PrivateMutable<PlayerActionNote, Context>, Context>, Context>,
-        private_opponent_last_action: Map<GameId, Owned<PrivateMutable<OpponentActionNote, Context>, Context>, Context>,
+        private_turns: Map<GameId, Map<Turn, Owned<PrivateImmutable<PlayedTurnNote, Context>, Context>, Context>, Context>,
+        private_my_shots: Map<GameId, Map<Coordinate, Map<Coordinate, Owned<SingleUseClaim<Context>, Context>, Context>, Context>, Context>,
         private_hit_counter: Map<GameId, Owned<PrivateMutable<UintNote, Context>, Context>, Context>,
     }
 
@@ -58,7 +49,6 @@ contract Battleships {
         ships: ShipPlacement
     ) {
         let host = self.context.msg_sender().unwrap();
-        let timestamp = self.context.get_anchor_block_header().global_variables.timestamp;
 
         // Initialize my counter
         self.storage.private_hit_counter
@@ -75,13 +65,6 @@ contract Battleships {
             .initialize(BoardNote { board })
             .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
-        // Initialize last action
-        self.storage.private_my_last_action
-            .at(game_id)
-            .at(host)
-            .initialize(PlayerActionNote{ turn: 0, timestamp })
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);        
-
         // Call public function to update game status
         Battleships::at(self.context.this_address())
             .on_game_created(game_id, host)
@@ -92,17 +75,17 @@ contract Battleships {
     #[only_self]
     fn on_game_created(game_id: GameId, host: AztecAddress) {
         // Initialize game state
-        let game_state = PublicGameState::new(host.to_field());
-
-        self.storage.public_games
+        self.storage.public_game_hosts
             .at(game_id)
-            .write(game_state);
+            .initialize(host);
+        self.storage.public_game_status
+            .at(game_id)
+            .write(STATUS_CREATED);
     }
 
     #[external("private")]
     fn join_game(
         game_id: GameId,
-        host: AztecAddress,
         ships: ShipPlacement,
         initial_shot: Shot
     ) {
@@ -110,6 +93,9 @@ contract Battleships {
         crate::utils::validate_shot(initial_shot);
 
         let guest = self.context.msg_sender().unwrap();
+        let host = self.storage.public_game_hosts
+            .at(game_id)
+            .read();
 
         // Initialize counter
         self.storage.private_hit_counter
@@ -145,25 +131,22 @@ contract Battleships {
 
         // Enqueue public function to start game
         Battleships::at(self.context.this_address())
-            .on_game_joined(game_id, host)
+            .on_game_joined(game_id)
             .enqueue(self.context);
     }
 
     #[external("public")]
     #[only_self]
-    fn on_game_joined(game_id: GameId, host: AztecAddress) {
-        let mut game_state = self.storage.public_games.at(game_id).read();
+    fn on_game_joined(game_id: GameId) {
+        let mut game_status = self.storage.public_game_status
+            .at(game_id)
+            .read();
 
         // Validate game is in created state
-        assert(game_state.status == STATUS_CREATED, "Game not in created state");
-
-        // Validate host is correct
-        assert(game_state.host == host.to_field(), "Invalid host");
+        assert(game_status == STATUS_CREATED, "Game not in created state");
 
         // Activate game
-        game_state.status = STATUS_ACTIVE;
-
-        self.storage.public_games.at(game_id).write(game_state);
+        self.storage.public_game_status.at(game_id).write(STATUS_ACTIVE);
     }
 
     // ============================================================================
@@ -172,48 +155,39 @@ contract Battleships {
     #[external("private")]
     fn shoot(
         game_id: GameId,
+        turn: Turn,
         shot: Shot
     ) {
         // Validate new shot
         crate::utils::validate_shot(shot);
 
         let player = self.context.msg_sender().unwrap();
-
-        // Read my last action from storage
-        let my_action = self.storage.private_my_last_action
+        let opponent = self.storage.private_opponent
             .at(game_id)
             .at(player)
             .get_note()
-            .get_note();
+            .address;
 
-        // Read my opponent's last action from my storage
-        let opponent_action = self.storage.private_opponent_last_action
+        // Read opponent's turn 
+        // Note: fetching the note would fail if it didn't exist
+        let opponents_turn = self.storage.private_turns
             .at(game_id)
-            .at(player)
-            .get_note()
+            .at(turn - 1)
+            .at(opponent)
             .get_note();
-        
-        assert(opponent_action.turn == my_action.turn + 1, "Not my turn");
 
         // Verify opponent's last shot
-        // let did_i_lose = self.internal.verify_opponents_shot(game_id, opponent_action.shot);
-        let did_i_lose = false;
+        let did_i_lose = self.internal.verify_opponents_shot(game_id, opponents_turn.shot);
 
         if (did_i_lose) {
-            let status = if (my_action.turn % 2 == 0) { STATUS_WON_BY_GUEST } else { STATUS_WON_BY_HOST };
+            let status = if (turn % 2 == 0) { STATUS_WON_BY_GUEST } else { STATUS_WON_BY_HOST };
             // Call public function to process loss
             Battleships::at(self.context.this_address())
                 .on_finished(game_id, status)
                 .enqueue(self.context);
         } else {
-             let opponent = self.storage.private_opponent
-                .at(game_id)
-                .at(player)
-                .get_note()
-                .address;
-
             // Apply our new shot with turn number
-            self.internal.apply_my_shot(game_id, opponent, shot, my_action.turn + 2);
+            self.internal.apply_my_shot(game_id, opponent, shot, turn);
 
             // Call public function to increment turn
             Battleships::at(self.context.this_address())
@@ -226,23 +200,28 @@ contract Battleships {
     #[external("public")]
     #[only_self]
     fn on_shoot(game_id: GameId) {
-        let mut game_state = self.storage.public_games.at(game_id).read();
+        let mut game_status = self.storage.public_game_status
+            .at(game_id)
+            .read();
 
        // Check game is active
-        assert(game_state.status == STATUS_ACTIVE, "Game not active");
+        assert(game_status == STATUS_ACTIVE, "Game not active");
     }
 
     #[external("public")]
     #[only_self]
     fn on_finished(game_id: GameId, end_status: u8) {
-        let mut game_state: PublicGameState = self.storage.public_games.at(game_id).read();
+        let mut game_status = self.storage.public_game_status
+            .at(game_id)
+            .read();
 
         // Check game is active
-        assert(game_state.status == STATUS_ACTIVE, "Game not active");
+        assert(game_status == STATUS_ACTIVE, "Game not active");
 
-        // Mark game as completed
-        game_state.status = end_status;
-        self.storage.public_games.at(game_id).write(game_state);
+        // Mark game as completed with the correct status
+        self.storage.public_game_status
+            .at(game_id)
+            .write(end_status);
     }
 
     #[internal("private")]
@@ -263,12 +242,18 @@ contract Battleships {
 
         if is_hit {
             // Read counter
-            let counter: u128 = self.storage.private_hit_counter
+            let counter_message = self.storage.private_hit_counter
                 .at(game_id)
                 .at(player)
-                .get_note()
+                .get_note();
+
+            let counter = counter_message
                 .get_note()
                 .value;
+            
+            counter_message.deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+
+            aztec::oracle::debug_log::debug_log_format("Counter: {}", [counter as Field]);
 
             if (counter == (TOTAL_SHIP_CELLS as u128) - 1) {
                 lost = true;
@@ -289,26 +274,31 @@ contract Battleships {
         game_id: GameId,
         opponent: AztecAddress,
         shot: Shot,
-        turn: u8
+        turn: u32
     ) {
         let player = self.context.msg_sender().unwrap();
         let timestamp = self.context.get_anchor_block_header().global_variables.timestamp;
 
-        // TODO: Check we haven't shot this position before
-
-        // Update my last action with turn and timestamp
-        self.storage.private_my_last_action
+        // Check we haven't shot this position before
+        self.storage.private_my_shots
             .at(game_id)
+            .at(shot.x)
+            .at(shot.y)
             .at(player)
-            .initialize_or_replace(|_| PlayerActionNote{ turn, timestamp } )
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+            .claim();
 
-        // "Send" shot to opponent (they will read this when they shoot next)
-        self.storage.private_opponent_last_action
+        // Store my turn and send it to my opponent
+        // Note: this would fail if we had already played this turn before
+        self.storage.private_turns
             .at(game_id)
-            .at(opponent)
-            .initialize_or_replace(|_| OpponentActionNote { turn, shot })
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+            .at(turn)
+            .at(player)
+            .initialize(PlayedTurnNote { shot, timestamp })
+            .deliver_to(opponent, MessageDelivery.CONSTRAINED_ONCHAIN);
+
+        // Emit nullifier so that I can prove that this turn as been played
+        let nullifier = self.internal.build_nullifier(game_id, turn);
+        self.context.push_nullifier(nullifier);
     }
    
     // ============================================================================
@@ -316,36 +306,66 @@ contract Battleships {
     // ============================================================================
 
     #[external("private")]
-    fn claim_abandonment(game_id: GameId) {
+    fn claim_abandonment(game_id: GameId, current_turn: Turn) {
         let player = self.context.msg_sender().unwrap();
+        let block_header = self.context.get_anchor_block_header();
+        let current_timestamp = block_header.global_variables.timestamp as u128;
 
-        // Read my own last action to get when I last acted
-        let my_last_action = self.storage.private_my_last_action
+        // Read my own last turn to get timestamp
+        // Note: will fail if I haven't played this turn
+        let my_last_turn = self.storage.private_turns
             .at(game_id)
+            .at(current_turn - 1)
             .at(player)
-            .get_note()
             .get_note();
 
-        // Read my opponent's last action from my storage
-        let opponent_action = self.storage.private_opponent_last_action
-            .at(game_id)
-            .at(player)
-            .get_note()
-            .get_note();
-        
-        assert(opponent_action.turn == my_last_action.turn + 1, "Not my turn");
+       // Make sure enough time has passed
+        let last_timestamp = my_last_turn.timestamp as u128;
+        assert(current_timestamp - last_timestamp > (TURN_TIMEOUT as u128), "Opponent still has time to play");
 
-        let current_timestamp = self.context.get_anchor_block_header().global_variables.timestamp as u128;
-        let last_timestamp = my_last_action.timestamp as u128;
-        assert(current_timestamp - last_timestamp > (TURN_TIMEOUT as u128), "Opponent did not abandon");
+        // Make sure opponent hasnt played by emitting the turn's nullifier
+        let nullifier = self.internal.build_nullifier(game_id, current_turn);
+        self.context.push_nullifier(nullifier);
 
-        let status = if (my_last_action.turn % 2 == 0) { STATUS_WON_BY_HOST } else { STATUS_WON_BY_GUEST };
+        let status = if (current_turn % 2 == 0) { STATUS_WON_BY_GUEST } else { STATUS_WON_BY_HOST };
 
         // Call public function to mark abandonment
         Battleships::at(self.context.this_address())
             .on_finished(game_id, status)
             .enqueue(self.context);
     }
+
+
+    #[internal("private")]
+    fn build_nullifier(game_id: GameId, turn: Turn) -> Field {
+        let hash = poseidon2_hash_with_separator(
+            [game_id.to_field(), turn as Field],
+            DOM_SEP__NOTE_HASH as Field,
+        );
+
+        hash
+    }
+
+    // ============================================================================
+    // UTILITY FUNCTIONS
+    // ============================================================================
+
+    #[external("utility")]
+    unconstrained fn get_game_status(game_id: GameId) -> u8 {
+        self.storage.public_game_status
+            .at(game_id)
+            .read()
+    }
+
+    #[external("utility")]
+    unconstrained fn get_hit_counter(game_id: GameId, player: AztecAddress) -> u128 {
+        self.storage.private_hit_counter
+            .at(game_id)
+            .at(player)
+            .view_note()
+            .value
+    }
+
 }
 
 mod test;

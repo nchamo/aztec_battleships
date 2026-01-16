@@ -30,14 +30,14 @@ impl ToField for GameId {
     }
 }
 
-// Type alias for coordinates (cleaner map keys)
-pub type Coordinate = Field;
+pub type Coordinate = u8;
+pub type Turn = u32;
 
 // Shot coordinates
-#[derive(Packable, Serialize, Deserialize)]
+#[derive(Packable, Serialize, Deserialize, Eq)]
 pub struct Shot {
-    pub x: u8,
-    pub y: u8,
+    pub x: Coordinate,
+    pub y: Coordinate,
 }
 
 #[derive(Packable, Serialize, Deserialize)]
@@ -47,32 +47,23 @@ pub struct ShotNote {
 }
 
 impl Shot {
-    pub fn new(x: u8, y: u8) -> Self {
+    pub fn new(x: Coordinate, y: Coordinate) -> Self {
         Self { x, y }
     }
 }
 
-// Player's own last action - used to track when they last acted
 #[derive(Packable, Serialize, Deserialize)]
 #[note]
-pub struct PlayerActionNote {
-    pub turn: u8,        // Which turn this action was taken
-    pub timestamp: u64,     // When this action was taken
-}
-
-// Opponent's last action - includes their shot
-#[derive(Packable, Serialize, Deserialize)]
-#[note]
-pub struct OpponentActionNote {
-    pub turn: u8,        // Which turn the opponent took this action
-    pub shot: Shot,         // The shot the opponent took
+pub struct PlayedTurnNote {
+    pub shot: Shot,
+    pub timestamp: u64
 }
 
 // Ship data - position and orientation
 #[derive(Packable, Serialize, Deserialize)]
 pub struct ShipData {
-    pub x: u8,           // Starting x position (0-9)
-    pub y: u8,           // Starting y position (0-9)
+    pub x: Coordinate,           // Starting x position (0-9)
+    pub y: Coordinate,           // Starting y position (0-9)
     pub orientation: u8, // 0=horizontal, 1=vertical
 }
 
@@ -103,7 +94,7 @@ impl PublicGameState {
 }
 
 // Board storage with custom tight packing (100 bools -> 1 Field)
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Eq)]
 #[note]
 pub struct BoardNote {
     pub board: [bool; 100],  // 10x10 board, true = ship cell, false = empty
