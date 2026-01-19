@@ -90,28 +90,3 @@ pub fn create_overlapping_ships() -> ShipPlacement {
         destroyer: ShipData { x: 7, y: 7, orientation: 0 },
     }
 }
-
-// Create ship that extends past right edge
-pub fn create_ship_past_right_edge() -> ShipData {
-    ShipData { x: 8, y: 5, orientation: 0 }  // x=8 + length=5 = 13 > 10
-}
-
-// Create ship that extends past bottom edge
-pub fn create_ship_past_bottom_edge() -> ShipData {
-    ShipData { x: 5, y: 7, orientation: 1 }  // y=7 + length=4 = 11 > 10
-}
-
-// Create ship with x out of bounds
-pub fn create_ship_x_out_of_bounds() -> ShipData {
-    ShipData { x: 10, y: 5, orientation: 0 }
-}
-
-// Create ship with y out of bounds
-pub fn create_ship_y_out_of_bounds() -> ShipData {
-    ShipData { x: 5, y: 11, orientation: 1 }
-}
-
-// Create ship with invalid orientation
-pub fn create_ship_invalid_orientation() -> ShipData {
-    ShipData { x: 5, y: 5, orientation: 2 }
-}

@@ -1,9 +1,7 @@
 use crate::types::{ShipData, ShipPlacement, Shot};
-use crate::utils::{expand_ship, cells_intersect, validate_single_ship, validate_shot, validate_and_build_board};
+use crate::utils::{expand_ship, validate_shot, validate_and_build_board};
 use crate::test::helpers::{
-    create_valid_ships, create_valid_ships_player2, create_overlapping_ships,
-    create_ship_past_right_edge, create_ship_past_bottom_edge,
-    create_ship_x_out_of_bounds, create_ship_y_out_of_bounds, create_ship_invalid_orientation
+    create_valid_ships, create_valid_ships_player2, create_overlapping_ships,    
 };
 
 // ============================================================================
@@ -60,98 +58,6 @@ unconstrained fn test_expand_ship_at_edge() {
 }
 
 // ============================================================================
-// validate_single_ship() tests
-// ============================================================================
-
-#[test]
-unconstrained fn test_validate_ship_valid() {
-    let ship = ShipData { x: 5, y: 5, orientation: 0 };
-    validate_single_ship(ship, 3);  // Should not fail
-}
-
-#[test(should_fail_with = "Ship x out of bounds")]
-unconstrained fn test_validate_ship_x_out_of_bounds() {
-    let ship = create_ship_x_out_of_bounds();
-    validate_single_ship(ship, 3);
-}
-
-#[test(should_fail_with = "Ship y out of bounds")]
-unconstrained fn test_validate_ship_y_out_of_bounds() {
-    let ship = create_ship_y_out_of_bounds();
-    validate_single_ship(ship, 3);
-}
-
-#[test(should_fail_with = "Invalid orientation")]
-unconstrained fn test_validate_ship_invalid_orientation() {
-    let ship = create_ship_invalid_orientation();
-    validate_single_ship(ship, 3);
-}
-
-#[test(should_fail_with = "Ship extends past right edge")]
-unconstrained fn test_validate_ship_extends_past_right() {
-    let ship = create_ship_past_right_edge();
-    validate_single_ship(ship, 5);  // Length 5 at x=8 -> extends to x=13
-}
-
-#[test(should_fail_with = "Ship extends past bottom edge")]
-unconstrained fn test_validate_ship_extends_past_bottom() {
-    let ship = create_ship_past_bottom_edge();
-    validate_single_ship(ship, 4);  // Length 4 at y=7 -> extends to y=11
-}
-
-// ============================================================================
-// cells_intersect() tests
-// ============================================================================
-
-#[test]
-unconstrained fn test_cells_no_intersection() {
-    let ship1 = ShipData { x: 0, y: 0, orientation: 0 };
-    let ship2 = ShipData { x: 5, y: 5, orientation: 0 };
-
-    let cells1 = expand_ship(ship1, 3);
-    let cells2 = expand_ship(ship2, 3);
-
-    let intersects = cells_intersect(cells1, 3, cells2, 3);
-    assert(!intersects, "Ships should not intersect");
-}
-
-#[test]
-unconstrained fn test_cells_intersection() {
-    let ship1 = ShipData { x: 0, y: 0, orientation: 0 };
-    let ship2 = ShipData { x: 0, y: 0, orientation: 1 };
-
-    let cells1 = expand_ship(ship1, 3);
-    let cells2 = expand_ship(ship2, 3);
-
-    let intersects = cells_intersect(cells1, 3, cells2, 3);
-    assert(intersects, "Ships should intersect at (0,0)");
-}
-
-#[test]
-unconstrained fn test_cells_adjacent_no_intersection() {
-    let ship1 = ShipData { x: 0, y: 0, orientation: 0 };  // (0,0)-(2,0)
-    let ship2 = ShipData { x: 0, y: 1, orientation: 0 };  // (0,1)-(2,1)
-
-    let cells1 = expand_ship(ship1, 3);
-    let cells2 = expand_ship(ship2, 3);
-
-    let intersects = cells_intersect(cells1, 3, cells2, 3);
-    assert(!intersects, "Adjacent ships should not intersect");
-}
-
-#[test]
-unconstrained fn test_cells_exact_overlap() {
-    let ship1 = ShipData { x: 5, y: 5, orientation: 0 };
-    let ship2 = ShipData { x: 5, y: 5, orientation: 0 };
-
-    let cells1 = expand_ship(ship1, 3);
-    let cells2 = expand_ship(ship2, 3);
-
-    let intersects = cells_intersect(cells1, 3, cells2, 3);
-    assert(intersects, "Exact same position should intersect");
-}
-
-// ============================================================================
 // validate_shot() tests
 // ============================================================================
 
@@ -186,16 +92,13 @@ unconstrained fn test_validate_shot_both_out_of_bounds() {
 }
 
 // ============================================================================
-// validate_and_build_board() tests - Optimized unified function
+// validate_and_build_board() tests
 // ============================================================================
 
 #[test]
 unconstrained fn test_validate_and_build_board_valid_ships() {
     let ships = create_valid_ships();
     let board = validate_and_build_board(ships);
-
-    // Should not fail validation
-    // Should produce correct board with all 17 cells marked
 
     // Verify carrier cells (0,0)-(4,0) are marked
     assert(board[0], "Carrier cell (0,0) should be set");
@@ -218,10 +121,10 @@ unconstrained fn test_validate_and_build_board_valid_ships() {
     assert(!board[99], "Empty cell (9,9) should not be set");
 }
 
-#[test(should_fail_with = "Carrier and battleship overlap")]
+#[test(should_fail_with = "Ships overlap")]
 unconstrained fn test_validate_and_build_board_overlapping() {
     let ships = create_overlapping_ships();
-    let _ = validate_and_build_board(ships);  // Should fail with overlap error
+    let _ = validate_and_build_board(ships); 
 }
 
 #[test]
@@ -240,10 +143,10 @@ unconstrained fn test_validate_and_build_board_vertical_ships() {
     assert(!board[0], "Empty cell (0,0) should not be set");
 }
 
-#[test(should_fail_with = "Ship extends past right edge")]
+#[test(should_fail_with = "Ship out of bounds")]
 unconstrained fn test_validate_and_build_board_extends_past_edge() {
     let ships = ShipPlacement {
-        carrier: create_ship_past_right_edge(),  // x=8, length=5 -> extends to 13
+        carrier: ShipData { x: 8, y: 5, orientation: 0 },  // x=8 + length=5 = 13 > 10
         battleship: ShipData { x: 0, y: 5, orientation: 0 },
         cruiser: ShipData { x: 0, y: 6, orientation: 0 },
         submarine: ShipData { x: 0, y: 7, orientation: 0 },
