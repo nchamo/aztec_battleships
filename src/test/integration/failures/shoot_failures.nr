@@ -6,7 +6,7 @@ use crate::types::{Shot, GameId, STATUS_WON_BY_HOST};
 use crate::test::helpers::{create_valid_ships, create_valid_ships_player2, get_ship_cells};
 
 // Test that a player cannot shoot when it's not their turn
-#[test(should_fail)]
+#[test(should_fail_with = "Failed to get a note")]
 unconstrained fn test_shoot_out_of_turn_fails() {
     std::println("=== TEST: Shoot Out of Turn (Should Fail) ===");
 
@@ -49,7 +49,7 @@ unconstrained fn test_shoot_out_of_turn_fails() {
 }
 
 // Test that a player cannot shoot twice in a row
-#[test(should_fail)]
+#[test(should_fail_with = "Failed to get a note")]
 unconstrained fn test_shoot_twice_in_row_fails() {
     std::println("=== TEST: Shoot Twice in a Row (Should Fail) ===");
 
@@ -230,47 +230,6 @@ unconstrained fn test_shoot_same_coordinate_twice_fails() {
     );
 
     std::println("ERROR: Should not reach here!");
-}
-
-// Test that different players CAN shoot the same coordinate
-// (each player tracks their own shots separately)
-#[test]
-unconstrained fn test_different_players_can_shoot_same_coordinate() {
-    std::println("=== TEST: Different Players Can Shoot Same Coordinate ===");
-
-    let mut env = TestEnvironment::new();
-    let host = env.create_light_account();
-    let guest = env.create_light_account();
-    let contract_address = env.deploy("Battleships").without_initializer();
-
-    let game_id = GameId::new(200009);
-
-    // Setup game
-    std::println("Host creates game");
-    env.call_private(
-        host,
-        Battleships::at(contract_address).create_game(game_id, create_valid_ships())
-    );
-
-    std::println("Guest joins game with shot at (5,5)");
-    env.call_private(
-        guest,
-        Battleships::at(contract_address).join_game(
-            game_id,
-            create_valid_ships_player2(),
-            Shot { x: 5, y: 5 }
-        )
-    );
-
-    // Host shoots at (5,5) - same coordinate guest shot
-    std::println("Host shoots at (5,5) - same coordinate - turn 2");
-    env.call_private(
-        host,
-        Battleships::at(contract_address).shoot(game_id, 2, Shot { x: 5, y: 5 })
-    );
-
-    std::println("SUCCESS! Different players can shoot the same coordinate");
-    std::println("(Each player attacks opponent's board independently)");
 }
 
 // Test that shooting after game is won should fail

@@ -65,7 +65,7 @@ pub fn validate_shot(shot: Shot) {
 fn mark_cells(board: &mut [bool; 100], cells: [(u8, u8); 5], length: u8) {
     for i in 0..5 {
         if (i as u8) < length {
-            let idx = (cells[i].1 as u32) * 10 + (cells[i].0 as u32);
+            let idx = (cells[i].1 as u32) * (BOARD_SIZE as u32) + (cells[i].0 as u32);
             board[idx] = true;
         }
     }

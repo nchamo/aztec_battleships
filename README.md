@@ -64,7 +64,11 @@ battleships/
 bash -i <(curl -s https://install.aztec.network)
 ```
 
-2. The Aztec binaries will be available at `~/.aztec/bin/`
+2. Run `aztec-up` to install/update Aztec binaries:
+```bash
+# Currently we use 3.0.0-devnet.20251212 version, make sure you have the right one
+aztec-up 3.0.0-devnet.20251212
+```
 
 3. Clone this repository:
 ```bash

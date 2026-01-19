@@ -16,7 +16,7 @@ contract Battleships {
     use crate::types::{
         ShipPlacement, GameId, Shot, BoardNote, Turn,
         PlayedTurnNote, Coordinate,
-        TOTAL_SHIP_CELLS, TURN_TIMEOUT,
+        BOARD_SIZE, TOTAL_SHIP_CELLS, TURN_TIMEOUT,
         STATUS_CREATED, STATUS_ACTIVE, STATUS_WON_BY_HOST, STATUS_WON_BY_GUEST
     };
     use uint_note::uint_note::UintNote;
@@ -232,7 +232,7 @@ contract Battleships {
             .at(player)
             .get_note()
             .board;
-        let idx = (opponent_shot.y as u32) * 10 + (opponent_shot.x as u32);
+        let idx = (opponent_shot.y as u32) * (BOARD_SIZE as u32) + (opponent_shot.x as u32);
         let is_hit = my_board[idx];
 
         let lost = &mut false; 
