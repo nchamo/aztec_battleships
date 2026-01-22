@@ -1,0 +1,11 @@
+{
+  "network": "sandbox",
+  "nodeUrl": "http://localhost:8080",
+  "battleshipsContract": {
+    "address": "0x086c98ba01df621c762515aac536d9d05ac34e087be9b455c6f59cdc0f2d6cad",
+    "salt": "0x0000000000000000000000000000000000000000000000000000000000000539"
+  },
+  "deployer": "0x18b1cbdcec832adbece3fb2aafa7cd0a6b7a892b76f85efc1499593b2556b20f",
+  "proverEnabled": false,
+  "deployedAt": "2026-01-21T17:25:38.927Z"
+}

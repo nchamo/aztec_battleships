@@ -6,7 +6,7 @@ use crate::types::{Shot, GameId, STATUS_WON_BY_HOST};
 use crate::test::helpers::{create_valid_ships, create_valid_ships_player2, get_ship_cells};
 
 // Test that a player cannot shoot when it's not their turn
-#[test(should_fail_with = "Failed to get a note")]
+#[test(should_fail_with = "Invalid player")]
 unconstrained fn test_shoot_out_of_turn_fails() {
     std::println("=== TEST: Shoot Out of Turn (Should Fail) ===");
 
@@ -49,7 +49,7 @@ unconstrained fn test_shoot_out_of_turn_fails() {
 }
 
 // Test that a player cannot shoot twice in a row
-#[test(should_fail_with = "Failed to get a note")]
+#[test(should_fail_with = "Invalid player")]
 unconstrained fn test_shoot_twice_in_row_fails() {
     std::println("=== TEST: Shoot Twice in a Row (Should Fail) ===");
 

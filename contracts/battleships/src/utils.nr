@@ -1,4 +1,17 @@
-use crate::types::{ShipData, ShipPlacement, Shot, BOARD_SIZE, SHIP_SIZES, TOTAL_CELLS, Coordinate};
+use crate::types::{GameId, Turn, ShipData, ShipPlacement, Shot, BOARD_SIZE, SHIP_SIZES, TOTAL_CELLS, Coordinate};
+use aztec::{
+        protocol_types::{traits::ToField, hash::poseidon2_hash_with_separator},
+    };
+
+
+pub fn build_nullifier(game_id: GameId, turn: Turn) -> Field {
+    // Note: this leaks privacy. We should introduce a shared secret or randomness between players so that third parties 
+    //       can't check which turns have been played
+    poseidon2_hash_with_separator(
+        [game_id.to_field(), turn as Field],
+        1,
+    )
+}
 
 // Expand a ship to its cell coordinates
 pub fn expand_ship(ship: ShipData, length: u8) -> [(Coordinate, Coordinate); 5] {

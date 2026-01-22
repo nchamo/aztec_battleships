@@ -72,7 +72,7 @@ impl Shot {
 // ============================================================================
 // NOTES
 // ============================================================================   
-#[derive(Packable, Serialize, Deserialize)]
+#[derive(Packable, Serialize, Deserialize, Eq)]
 #[note]
 pub struct PlayedTurnNote {
     pub shot: Shot,

@@ -8,7 +8,7 @@ mod utils;
 contract Battleships {    
     use aztec::{
         macros::{functions::{external, only_self, internal}, storage::storage},
-        protocol_types::{traits::ToField, address::AztecAddress, hash::poseidon2_hash_with_separator},
+        protocol_types::{address::AztecAddress},
         messages::message_delivery::MessageDelivery,
         state_vars::{Map, PrivateImmutable, PrivateMutable, PublicImmutable, PublicMutable, Owned, SingleUseClaim},
     };
@@ -20,7 +20,7 @@ contract Battleships {
         STATUS_CREATED, STATUS_ACTIVE, STATUS_WON_BY_HOST, STATUS_WON_BY_GUEST
     };
     use uint_note::uint_note::UintNote;
-    use address_note::address_note::AddressNote;    
+    use aztec::oracle::notes::check_nullifier_exists;
 
     /*
     The battleships workflow is quite simple:
@@ -38,15 +38,13 @@ contract Battleships {
         // PUBLIC
         // We'll store the status (created, active, finished) for each game
         public_game_status: Map<GameId, PublicMutable<GameStatus, Context>, Context>,
-        // We'll store each game host's address so that guests can communicate with them privately
-        // Note: we'll make this immutable so that we can read it privately
+        // We'll store each game's host and guest address so that they can communicate privately
         public_game_hosts: Map<GameId, PublicImmutable<AztecAddress, Context>, Context>,
+        public_game_guests: Map<GameId, PublicImmutable<AztecAddress, Context>, Context>,
 
         // PRIVATE
         // Each player will store their own board
         private_board: Map<GameId, Owned<PrivateImmutable<BoardNote, Context>, Context>, Context>,
-        // We'll store each player's opponent so that we can send notes between them
-        private_opponent: Map<GameId, Owned<PrivateImmutable<AddressNote, Context>, Context>, Context>,
         // Each player will store their own turn (shot, timestamp), and then they will send the note to their opponent. By doing so, 
         // each player will learn the other's shot
         private_turns: Map<GameId, Map<Turn, Owned<PrivateImmutable<PlayedTurnNote, Context>, Context>, Context>, Context>,
@@ -129,39 +127,27 @@ contract Battleships {
             .initialize(BoardNote { board })
             .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
 
-        // Store opponent address for myself
-        // Note: we could avoid this and simply read the public host variable, but we are storing it so that
-        //       both host and guest can be used the same
-        self.storage.private_opponent
-            .at(game_id)
-            .at(guest)
-            .initialize(AddressNote{ address: host })
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
-
-        // Set opponent's opponent to be me (guest)
-        self.storage.private_opponent
-            .at(game_id)
-            .at(host)
-            .initialize(AddressNote{ address: guest })
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
-
         self.internal.apply_my_shot(game_id, host, initial_shot, 1);
 
         // Enqueue public function to start game        
         Battleships::at(self.address)
-            ._on_game_joined(game_id)
+            ._on_game_joined(game_id, guest)
             .enqueue(self.context);
     }
 
     #[external("public")]
     #[only_self]
-    fn _on_game_joined(game_id: GameId) {
+    fn _on_game_joined(game_id: GameId, guest: AztecAddress) {
         let game_status = self.storage.public_game_status
             .at(game_id)
             .read();
 
         assert(game_status == STATUS_CREATED, "Game not in created state");
 
+        // Note: would fail if guest was already set
+        self.storage.public_game_guests
+            .at(game_id)
+            .initialize(guest);
         self.storage.public_game_status.at(game_id).write(STATUS_ACTIVE);
     }
 
@@ -176,12 +162,12 @@ contract Battleships {
     ) {
         crate::utils::validate_shot(shot);
 
+        let host = self.storage.public_game_hosts.at(game_id).read();
+        let guest = self.storage.public_game_guests.at(game_id).read();
+        let is_hosts_turn = turn % 2 == 0;
+        let (turn_player, opponent) = if is_hosts_turn { ( host, guest ) } else { ( guest, host ) };
         let player = self.msg_sender().unwrap();
-        let opponent = self.storage.private_opponent
-            .at(game_id)
-            .at(player)
-            .get_note()
-            .address;
+        assert(turn_player == player, "Invalid player");
 
         // Read opponent's turn 
         // Note: fetching the note would fail if it didn't exist
@@ -282,7 +268,6 @@ contract Battleships {
             .claim();
 
         // Store my turn and send it to my opponent
-        // Note: this would fail if we had already played this turn before
         self.storage.private_turns
             .at(game_id)
             .at(turn)
@@ -298,7 +283,7 @@ contract Battleships {
         self.context.set_include_by_timestamp(timestamp + one_hour);
 
         // Emit nullifier so that I can later prove that this turn has been played
-        let nullifier = self.internal.build_nullifier(game_id, turn);
+        let nullifier = crate::utils::build_nullifier(game_id, turn);
         self.context.push_nullifier(nullifier);
     }
    
@@ -324,7 +309,7 @@ contract Battleships {
         assert(current_timestamp - last_timestamp > TURN_TIMEOUT, "Opponent still has time to play");
 
         // Make sure opponent hasnt played by emitting the turn's nullifier
-        let nullifier = self.internal.build_nullifier(game_id, current_turn);
+        let nullifier = crate::utils::build_nullifier(game_id, current_turn);
         self.context.push_nullifier(nullifier);
 
         // Call public function to mark abandonment
@@ -332,17 +317,6 @@ contract Battleships {
         Battleships::at(self.address)
             ._on_finished(game_id, status)
             .enqueue(self.context);
-    }
-
-
-    #[internal("private")]
-    fn build_nullifier(game_id: GameId, turn: Turn) -> Field {
-        // Note: this leaks privacy. We should introduce a shared secret or randomness between players so that third parties 
-        //       can't check which turns have been played
-        poseidon2_hash_with_separator(
-            [game_id.to_field(), turn as Field],
-            1,
-        )
     }
 
     // ============================================================================
@@ -354,6 +328,45 @@ contract Battleships {
             .at(game_id)
             .read()
     }
+
+    #[external("utility")]
+    unconstrained fn get_game_host(game_id: GameId) -> AztecAddress {
+        self.storage.public_game_hosts
+            .at(game_id)
+            .read()
+    }
+
+    #[external("utility")]
+    unconstrained fn get_game_guest(game_id: GameId) -> AztecAddress {
+        self.storage.public_game_guests
+            .at(game_id)
+            .read()
+    }
+
+    #[external("utility")]
+    unconstrained fn was_turn_played(game_id: GameId, turn: Turn) -> bool {
+        assert(turn > 0, "Invalid turn");
+
+        let nullifier = crate::utils::build_nullifier(game_id, turn);
+        check_nullifier_exists(nullifier)
+    }
+
+    #[external("utility")]
+    unconstrained fn get_turn(game_id: GameId, turn: Turn) -> PlayedTurnNote {
+        assert(turn > 0, "Invalid turn");
+        
+        let host = self.storage.public_game_hosts.at(game_id).read();
+        let guest = self.storage.public_game_guests.at(game_id).read();
+        let is_hosts_turn = turn % 2 == 0;
+        let turn_player = if is_hosts_turn { host } else { guest };
+
+        self.storage.private_turns
+            .at(game_id)
+            .at(turn)
+            .at(turn_player)
+            .view_note()
+    }
+
 }
 
 mod test;
