@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Grid } from './Grid';
 import { useContract } from '../hooks/useContract';
 import { useGameStore } from '../store/game';
@@ -26,13 +26,95 @@ export function GameBoard() {
     opponentHits,
     contractStatus,
     recordMyShot,
+    recordOpponentShot,
     setIsMyTurn,
     setCurrentTurn,
+    setContractStatus,
+    setPhase,
     resetGame,
   } = useGameStore();
 
-  const { shoot, isLoading, error } = useContract();
+  const { shoot, wasTurnPlayed, getTurn, getGameStatus, isLoading, error } = useContract();
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+  const lastProcessedTurn = useRef<number>(0);
+
+  // Poll for opponent's turn when it's not my turn
+  useEffect(() => {
+    if (!gameId || isMyTurn || phase !== 'playing' || isPolling) return;
+
+    const pollOpponentTurn = async () => {
+      setIsPolling(true);
+      try {
+        // The opponent's turn number we're waiting for
+        // If I'm host (even turns), opponent plays odd turns
+        // If I'm guest (odd turns), opponent plays even turns
+        const opponentTurn = currentTurn + 1;
+
+        console.log(`[GameBoard] Polling for opponent turn ${opponentTurn}...`);
+
+        // First check if game is already over (my previous shot may have won)
+        const statusCheck = await getGameStatus(gameId);
+        if (statusCheck === STATUS_WON_BY_HOST || statusCheck === STATUS_WON_BY_GUEST) {
+          console.log(`[GameBoard] Game already over! Status: ${statusCheck}`);
+          setContractStatus(statusCheck);
+          setPhase('finished');
+          return;
+        }
+
+        // Check if opponent's turn was played
+        const played = await wasTurnPlayed(gameId, opponentTurn);
+        if (!played) {
+          console.log(`[GameBoard] Turn ${opponentTurn} not yet played`);
+          return;
+        }
+
+        console.log(`[GameBoard] Turn ${opponentTurn} was played! Fetching shot...`);
+
+        // Get the shot details
+        const shot = await getTurn(gameId, opponentTurn);
+        if (!shot) {
+          console.error(`[GameBoard] Failed to get turn ${opponentTurn} details`);
+          return;
+        }
+
+        console.log(`[GameBoard] Opponent shot at (${shot.x}, ${shot.y})`);
+
+        // Only process if we haven't processed this turn yet
+        if (lastProcessedTurn.current >= opponentTurn) {
+          console.log(`[GameBoard] Turn ${opponentTurn} already processed`);
+          return;
+        }
+        lastProcessedTurn.current = opponentTurn;
+
+        // Record opponent's shot
+        recordOpponentShot(shot);
+
+        // Check game status for win/loss
+        const status = await getGameStatus(gameId);
+        if (status === STATUS_WON_BY_HOST || status === STATUS_WON_BY_GUEST) {
+          setContractStatus(status);
+          setPhase('finished');
+          console.log(`[GameBoard] Game over! Status: ${status}`);
+        } else {
+          // It's now my turn
+          setCurrentTurn(opponentTurn + 1);
+          setIsMyTurn(true);
+          console.log(`[GameBoard] My turn now (turn ${opponentTurn + 1})`);
+        }
+      } catch (err) {
+        console.error('[GameBoard] Error polling opponent turn:', err);
+      } finally {
+        setIsPolling(false);
+      }
+    };
+
+    // Poll immediately and every 3 seconds
+    pollOpponentTurn();
+    const interval = setInterval(pollOpponentTurn, 3000);
+
+    return () => clearInterval(interval);
+  }, [gameId, isMyTurn, phase, currentTurn, isHost, wasTurnPlayed, getTurn, getGameStatus, recordOpponentShot, setCurrentTurn, setIsMyTurn, setContractStatus, setPhase, isPolling]);
 
   // Check win conditions
   const isGameOver = phase === 'finished';
@@ -52,15 +134,16 @@ export function GameBoard() {
     }
 
     try {
-      const nextTurn = currentTurn + 1;
-      await shoot(gameId, nextTurn, selectedShot);
+      // currentTurn is the turn we're about to play
+      await shoot(gameId, currentTurn, selectedShot);
 
       // For now, we don't know if it's a hit until opponent responds
       // Mark as pending (we'll use 'miss' as placeholder until we get confirmation)
       recordMyShot(selectedShot, false);
 
       setSelectedShot(null);
-      setCurrentTurn(nextTurn);
+      // After shooting, we wait for opponent's next turn (currentTurn + 1)
+      // But currentTurn stays the same - polling will look for currentTurn + 1
       setIsMyTurn(false);
     } catch (err) {
       console.error('Failed to shoot:', err);

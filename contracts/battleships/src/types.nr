@@ -8,7 +8,7 @@ use dep::aztec::{
     note::note_interface::NoteHash,
     context::PrivateContext,
     protocol_types::address::AztecAddress,
-    keys::getters::{get_public_keys, get_nsk_app},
+    keys::getters::{get_public_keys},
 };
 
 // ============================================================================

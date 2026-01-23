@@ -323,6 +323,67 @@ export function useContract() {
     [walletInstance, getContract]
   );
 
+  // Check if a turn was played (nullifier exists)
+  const wasTurnPlayed = useCallback(
+    async (gameId: string, turn: number): Promise<boolean> => {
+      if (!walletInstance) {
+        console.error('[Contract] Cannot check turn: wallet not connected');
+        return false;
+      }
+
+      try {
+        const contract = await getContract();
+        const gameIdField = gameId.startsWith('0x')
+          ? Fr.fromString(gameId)
+          : new Fr(BigInt(gameId));
+
+        const played = await contract.methods
+          .was_turn_played({ id: gameIdField }, turn)
+          .simulate({ from: walletInstance.address });
+
+        return Boolean(played);
+      } catch (err) {
+        console.error('[Contract] Failed to check if turn was played:', err);
+        return false;
+      }
+    },
+    [walletInstance, getContract]
+  );
+
+  // Get turn details (shot coordinates)
+  const getTurn = useCallback(
+    async (gameId: string, turn: number): Promise<{ x: number; y: number } | null> => {
+      if (!walletInstance) {
+        console.error('[Contract] Cannot get turn: wallet not connected');
+        return null;
+      }
+
+      try {
+        const contract = await getContract();
+        const gameIdField = gameId.startsWith('0x')
+          ? Fr.fromString(gameId)
+          : new Fr(BigInt(gameId));
+
+        const turnData = await contract.methods
+          .get_turn({ id: gameIdField }, turn)
+          .simulate({ from: walletInstance.address });
+
+        // turnData should have { shot: { x, y }, timestamp }
+        if (turnData && turnData.shot) {
+          return {
+            x: Number(turnData.shot.x),
+            y: Number(turnData.shot.y),
+          };
+        }
+        return null;
+      } catch (err) {
+        console.error('[Contract] Failed to get turn:', err);
+        return null;
+      }
+    },
+    [walletInstance, getContract]
+  );
+
   // Claim abandonment
   const claimAbandonment = useCallback(
     async (gameId: string, currentTurn: number) => {
@@ -370,6 +431,8 @@ export function useContract() {
     shoot,
     getGameStatus,
     getGameGuest,
+    wasTurnPlayed,
+    getTurn,
     claimAbandonment,
     isLoading,
     error,

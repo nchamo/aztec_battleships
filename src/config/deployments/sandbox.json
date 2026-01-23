@@ -2,10 +2,10 @@
   "network": "sandbox",
   "nodeUrl": "http://localhost:8080",
   "battleshipsContract": {
-    "address": "0x086c98ba01df621c762515aac536d9d05ac34e087be9b455c6f59cdc0f2d6cad",
+    "address": "0x0c4e9acb00dbb109009ec7173e6cd2610e72bbf0c361462e2f8342b3c7dec682",
     "salt": "0x0000000000000000000000000000000000000000000000000000000000000539"
   },
-  "deployer": "0x18b1cbdcec832adbece3fb2aafa7cd0a6b7a892b76f85efc1499593b2556b20f",
+  "deployer": "0x2c89b22a791068ebd674c33268b9b918416cf9408bfaa1af67b6e5423d90c801",
   "proverEnabled": false,
-  "deployedAt": "2026-01-21T17:25:38.927Z"
+  "deployedAt": "2026-01-23T12:24:32.815Z"
 }
