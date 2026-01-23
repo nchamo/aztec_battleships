@@ -66,8 +66,8 @@ bash -i <(curl -s https://install.aztec.network)
 
 2. Run `aztec-up` to install/update Aztec binaries:
 ```bash
-# Currently we use 3.0.0-devnet.20251212 version, make sure you have the right one
-aztec-up 3.0.0-devnet.20251212
+# Currently we use 4.0.0-nightly.20260122 version, make sure you have the right one
+aztec-up 4.0.0-nightly.20260122
 ```
 
 3. Clone this repository:
