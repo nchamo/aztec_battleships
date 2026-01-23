@@ -63,14 +63,14 @@ contract Battleships {
         game_id: GameId,
         ships: ShipPlacement
     ) {
-        let host = self.msg_sender().unwrap();
+        let host = self.msg_sender();
 
         // Initialize my counter
         self.storage.private_hit_counter
             .at(game_id)
             .at(host)
             .initialize(UintNote { value: 0 })
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+            .deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
 
         // Validate ships, build and store board
         let board = crate::utils::validate_and_build_board(ships);
@@ -78,7 +78,7 @@ contract Battleships {
             .at(game_id)
             .at(host)
             .initialize(BoardNote { board })
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+            .deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
 
         // Call public function to mark game status as created
         Battleships::at(self.address)
@@ -107,7 +107,7 @@ contract Battleships {
     ) {
         crate::utils::validate_shot(initial_shot);
 
-        let guest = self.msg_sender().unwrap();
+        let guest = self.msg_sender();
         let host = self.storage.public_game_hosts
             .at(game_id)
             .read();
@@ -117,7 +117,7 @@ contract Battleships {
             .at(game_id)
             .at(guest)
             .initialize(UintNote { value: 0 })
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+            .deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
 
         // Validate ships, build and store board
         let board = crate::utils::validate_and_build_board(ships);
@@ -125,7 +125,7 @@ contract Battleships {
             .at(game_id)
             .at(guest)
             .initialize(BoardNote { board })
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+            .deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
 
         self.internal.apply_my_shot(game_id, host, initial_shot, 1);
 
@@ -166,7 +166,7 @@ contract Battleships {
         let guest = self.storage.public_game_guests.at(game_id).read();
         let is_hosts_turn = turn % 2 == 0;
         let (turn_player, opponent) = if is_hosts_turn { ( host, guest ) } else { ( guest, host ) };
-        let player = self.msg_sender().unwrap();
+        let player = self.msg_sender();
         assert(turn_player == player, "Invalid player");
 
         // Read opponent's turn 
@@ -221,7 +221,7 @@ contract Battleships {
 
     #[internal("private")]
     fn verify_opponents_shot(game_id: GameId, opponent_shot: Shot) -> bool {
-        let player = self.msg_sender().unwrap();
+        let player = self.msg_sender();
 
         // Check if opponent hit any of my ships
         let my_board = self.storage.private_board
@@ -243,7 +243,7 @@ contract Battleships {
                     
                     UintNote { value: current.value + 1 }                    
                 })
-                .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+                .deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
         }
 
         *lost
@@ -256,7 +256,7 @@ contract Battleships {
         shot: Shot,
         turn: u32
     ) {
-        let player = self.msg_sender().unwrap();
+        let player = self.msg_sender();
         let timestamp = self.context.get_anchor_block_header().global_variables.timestamp;
 
         // Check we haven't shot this position before
@@ -267,13 +267,14 @@ contract Battleships {
             .at(player)
             .claim();
 
-        // Store my turn and send it to my opponent
-        self.storage.private_turns
+        // Store my turn and send it to both my opponent and myself
+        let note_message = self.storage.private_turns
             .at(game_id)
             .at(turn)
             .at(player)
-            .initialize(PlayedTurnNote { shot, timestamp })
-            .deliver_to(opponent, MessageDelivery.CONSTRAINED_ONCHAIN);
+            .initialize(PlayedTurnNote { shot, timestamp });
+        note_message.deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
+        note_message.deliver_to(opponent, MessageDelivery.ONCHAIN_CONSTRAINED);
         
         // We are setting the include_by_timestamp property to force players to choose anchors close to the present.
         // If we didn't do this, then a player might wait up until their timeout is almost completed, and then
@@ -292,7 +293,7 @@ contract Battleships {
     // ============================================================================
     #[external("private")]
     fn claim_abandonment(game_id: GameId, current_turn: Turn) {
-        let player = self.msg_sender().unwrap();
+        let player = self.msg_sender();
         let block_header = self.context.get_anchor_block_header();
         let current_timestamp = block_header.global_variables.timestamp;
 
@@ -354,7 +355,7 @@ contract Battleships {
     #[external("utility")]
     unconstrained fn get_turn(game_id: GameId, turn: Turn) -> PlayedTurnNote {
         assert(turn > 0, "Invalid turn");
-        
+
         let host = self.storage.public_game_hosts.at(game_id).read();
         let guest = self.storage.public_game_guests.at(game_id).read();
         let is_hosts_turn = turn % 2 == 0;

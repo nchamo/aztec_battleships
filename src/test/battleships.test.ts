@@ -16,7 +16,7 @@ import {
 } from "./utils.js";
 import { getInitialTestAccountsData } from "@aztec/accounts/testing";
 
-describe("Battleships Contract", () => {
+describe("Battleships Contract", { timeout: 600000 }, () => {
   let aztecNode: AztecNode
   let host: AztecAddress;
   let guest: AztecAddress;
@@ -56,8 +56,15 @@ describe("Battleships Contract", () => {
     // Register both accounts in walletGuest
     guest = (await walletGuest.createSchnorrAccount(testAccounts[1].secret, testAccounts[1].salt, testAccounts[1].signingKey)).address;
 
-    await walletGuest.registerSender(host);                                                                                                                                           
-    await walletHost.registerSender(guest);  
+    await walletGuest.registerSender(host);
+    await walletHost.registerSender(guest);
+
+    console.log("=== ADDRESSES ===");
+    console.log("HOST address:", host.toString());
+    console.log("GUEST address:", guest.toString());
+
+    // await walletHost.createSchnorrAccount(testAccounts[1].secret, testAccounts[1].salt, testAccounts[1].signingKey);
+    // await walletGuest.createSchnorrAccount(testAccounts[0].secret, testAccounts[0].salt, testAccounts[0].signingKey);
   });
 
   beforeEach(async () => {
@@ -65,8 +72,7 @@ describe("Battleships Contract", () => {
     contractHost = await deployBattleships(walletHost);
     contractGuest = await BattleshipsContract.at(contractHost.address, walletGuest);
     const contract = await aztecNode.getContract(contractHost.address)
-    await walletGuest.registerContract(contract!, BattleshipsContract.artifact)
-    // Note: registerSender not needed since both accounts are fully registered in both wallets
+    await walletGuest.registerContract(contract!, BattleshipsContract.artifact);
   });
 
   describe("Full Game Flow", () => {
@@ -117,12 +123,30 @@ describe("Battleships Contract", () => {
         .simulate({ from: host });
       expect(turn1Played).toBe(true);
 
+      // Notes are now delivered to BOTH the player and the opponent.
+      // So both players can read any turn via get_turn.
+
+      // Both players can read turn 1
+      const turn1FromHost = await contractHost.methods
+        .get_turn(gameId, 1)
+        .simulate({ from: host });
+      expect(turn1FromHost.shot.x).toBe(9n);
+      expect(turn1FromHost.shot.y).toBe(9n);
+
+      const turn1FromGuest = await contractGuest.methods
+        .get_turn(gameId, 1)
+        .simulate({ from: guest });
+      expect(turn1FromGuest.shot.x).toBe(9n);
+      expect(turn1FromGuest.shot.y).toBe(9n);
+
       // Host and guest alternate shots
       // Host hits guest's ships, guest misses
       for (let i = 0; i < 17; i++) {
+        const hostShot = { x: guestShipCells[i].x, y: guestShipCells[i].y };
+
         // Host shoots at guest's ship cell (even turns)
         await contractHost.methods
-          .shoot(gameId, turn, { x: guestShipCells[i].x, y: guestShipCells[i].y })
+          .shoot(gameId, turn, hostShot)
           .send({ from: host })
           .wait();
 
@@ -132,11 +156,26 @@ describe("Battleships Contract", () => {
           .simulate({ from: host });
         expect(hostTurnPlayed).toBe(true);
 
+        // Both players can read HOST's turn via get_turn
+        const hostTurnFromHost = await contractHost.methods
+          .get_turn(gameId, turn)
+          .simulate({ from: host });
+        expect(hostTurnFromHost.shot.x).toBe(BigInt(hostShot.x));
+        expect(hostTurnFromHost.shot.y).toBe(BigInt(hostShot.y));
+
+        const hostTurnFromGuest = await contractGuest.methods
+          .get_turn(gameId, turn)
+          .simulate({ from: guest });
+        expect(hostTurnFromGuest.shot.x).toBe(BigInt(hostShot.x));
+        expect(hostTurnFromGuest.shot.y).toBe(BigInt(hostShot.y));
+
         turn += 1;
+
+        const guestShot = { x: guestMissCoords[i].x, y: guestMissCoords[i].y };
 
         // Guest shoots and misses (odd turns)
         await contractGuest.methods
-          .shoot(gameId, turn, { x: guestMissCoords[i].x, y: guestMissCoords[i].y })
+          .shoot(gameId, turn, guestShot)
           .send({ from: guest })
           .wait();
 
@@ -148,6 +187,19 @@ describe("Battleships Contract", () => {
             .was_turn_played(gameId, turn)
             .simulate({ from: host });
           expect(guestTurnPlayed).toBe(true);
+
+          // Both players can read GUEST's turn via get_turn
+          const guestTurnFromHost = await contractHost.methods
+            .get_turn(gameId, turn)
+            .simulate({ from: host });
+          expect(guestTurnFromHost.shot.x).toBe(BigInt(guestShot.x));
+          expect(guestTurnFromHost.shot.y).toBe(BigInt(guestShot.y));
+
+          const guestTurnFromGuest = await contractGuest.methods
+            .get_turn(gameId, turn)
+            .simulate({ from: guest });
+          expect(guestTurnFromGuest.shot.x).toBe(BigInt(guestShot.x));
+          expect(guestTurnFromGuest.shot.y).toBe(BigInt(guestShot.y));
         }
 
         turn += 1;
@@ -203,11 +255,26 @@ describe("Battleships Contract", () => {
         .simulate({ from: host });
       expect(turn1Played).toBe(true);
 
+      // Both players can read turn 1
+      const turn1FromHost = await contractHost.methods
+        .get_turn(gameId, 1)
+        .simulate({ from: host });
+      expect(turn1FromHost.shot.x).toBe(BigInt(hostShipCells[0].x));
+      expect(turn1FromHost.shot.y).toBe(BigInt(hostShipCells[0].y));
+
+      const turn1FromGuest = await contractGuest.methods
+        .get_turn(gameId, 1)
+        .simulate({ from: guest });
+      expect(turn1FromGuest.shot.x).toBe(BigInt(hostShipCells[0].x));
+      expect(turn1FromGuest.shot.y).toBe(BigInt(hostShipCells[0].y));
+
       // Guest needs to hit remaining 16 cells (already hit 1 in join_game)
       for (let i = 1; i < 17; i++) {
+        const hostShot = { x: hostMissCoords[i - 1].x, y: hostMissCoords[i - 1].y };
+
         // Host shoots and misses (even turns)
         await contractHost.methods
-          .shoot(gameId, turn, { x: hostMissCoords[i - 1].x, y: hostMissCoords[i - 1].y })
+          .shoot(gameId, turn, hostShot)
           .send({ from: host })
           .wait();
 
@@ -217,11 +284,26 @@ describe("Battleships Contract", () => {
           .simulate({ from: guest });
         expect(hostTurnPlayed).toBe(true);
 
+        // Both players can read HOST's turn via get_turn
+        const hostTurnFromHost = await contractHost.methods
+          .get_turn(gameId, turn)
+          .simulate({ from: host });
+        expect(hostTurnFromHost.shot.x).toBe(BigInt(hostShot.x));
+        expect(hostTurnFromHost.shot.y).toBe(BigInt(hostShot.y));
+
+        const hostTurnFromGuest = await contractGuest.methods
+          .get_turn(gameId, turn)
+          .simulate({ from: guest });
+        expect(hostTurnFromGuest.shot.x).toBe(BigInt(hostShot.x));
+        expect(hostTurnFromGuest.shot.y).toBe(BigInt(hostShot.y));
+
         turn += 1;
+
+        const guestShot = { x: hostShipCells[i].x, y: hostShipCells[i].y };
 
         // Guest shoots at host's ship cell (odd turns)
         await contractGuest.methods
-          .shoot(gameId, turn, { x: hostShipCells[i].x, y: hostShipCells[i].y })
+          .shoot(gameId, turn, guestShot)
           .send({ from: guest })
           .wait();
 
@@ -230,6 +312,19 @@ describe("Battleships Contract", () => {
           .was_turn_played(gameId, turn)
           .simulate({ from: guest });
         expect(guestTurnPlayed).toBe(true);
+
+        // Both players can read GUEST's turn via get_turn
+        const guestTurnFromHost = await contractHost.methods
+          .get_turn(gameId, turn)
+          .simulate({ from: host });
+        expect(guestTurnFromHost.shot.x).toBe(BigInt(guestShot.x));
+        expect(guestTurnFromHost.shot.y).toBe(BigInt(guestShot.y));
+
+        const guestTurnFromGuest = await contractGuest.methods
+          .get_turn(gameId, turn)
+          .simulate({ from: guest });
+        expect(guestTurnFromGuest.shot.x).toBe(BigInt(guestShot.x));
+        expect(guestTurnFromGuest.shot.y).toBe(BigInt(guestShot.y));
 
         turn += 1;
       }

@@ -199,25 +199,24 @@ function compileLocalContracts(projectRoot: string): boolean {
         .readdirSync(targetDir)
         .some((f) => f.endsWith('.json'));
 
-    // Try to compile (using nargo, aztec-nargo, or aztec compile)
+    // Try to compile using aztec compile (which runs nargo + transpiles public bytecode)
     let compiled = false;
 
-    // Try aztec compile first (preferred for Aztec contracts)
-    // Note: Use $HOME/.aztec/bin/aztec to avoid picking up the npm package's aztec
-    // which doesn't have the compile command
-    const aztecPath = `$HOME/.aztec/bin/aztec`;
-    if (tryRun(`bash -l -c 'cd "${contractPath}" && ${aztecPath} compile'`)) {
+    // Set up PATH to include aztec tools:
+    // - $HOME/.aztec/current/bin: contains nargo, anvil, forge, etc.
+    // - $HOME/.aztec/current/node_modules/.bin: contains aztec, bb, etc.
+    const aztecBinPath = '$HOME/.aztec/current/bin';
+    const aztecNodeBinPath = '$HOME/.aztec/current/node_modules/.bin';
+    const pathSetup = `export PATH="${aztecBinPath}:${aztecNodeBinPath}:$PATH"`;
+
+    // Try aztec compile (preferred - compiles AND transpiles public bytecode)
+    if (tryRun(`bash -c '${pathSetup} && cd "${contractPath}" && aztec compile'`)) {
       console.log(`   ✅ ${contractDir} compiled with aztec compile`);
       compiled = true;
     }
-    // Try nargo as fallback (standard Noir compiler)
-    else if (tryRun(`bash -l -c 'cd "${contractPath}" && nargo compile'`)) {
-      console.log(`   ✅ ${contractDir} compiled with nargo`);
-      compiled = true;
-    }
-    // Try aztec-nargo if available
-    else if (tryRun(`bash -l -c 'cd "${contractPath}" && aztec-nargo compile'`)) {
-      console.log(`   ✅ ${contractDir} compiled with aztec-nargo`);
+    // Try nargo as fallback (WARNING: won't transpile public bytecode)
+    else if (tryRun(`bash -c '${pathSetup} && cd "${contractPath}" && nargo compile'`)) {
+      console.log(`   ⚠️ ${contractDir} compiled with nargo (public bytecode NOT transpiled)`);
       compiled = true;
     }
 

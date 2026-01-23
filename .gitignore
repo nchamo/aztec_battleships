@@ -30,4 +30,4 @@ node_modules
 dist
 
 codegenCache.json
-pxe/store
+pxe-store
