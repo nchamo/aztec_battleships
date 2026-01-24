@@ -39,7 +39,14 @@ export interface Shot {
   y: number;
 }
 
-export type CellState = 'empty' | 'ship' | 'hit' | 'miss' | 'sunk';
+// Turn data returned from contract's get_turn
+export interface PlayedTurn {
+  shot: Shot;
+  timestamp: bigint;
+  opponent_shot_hit: boolean; // Whether the opponent's previous shot was a hit
+}
+
+export type CellState = 'empty' | 'ship' | 'hit' | 'miss' | 'sunk' | 'pending';
 
 export type PlayerSlot = 'player1' | 'player2';
 

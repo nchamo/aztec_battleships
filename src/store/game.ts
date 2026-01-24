@@ -3,7 +3,7 @@ import type { ShipPlacement, Shot, CellState, GameStatus } from '../lib/types';
 import { STATUS_CREATED, BOARD_SIZE } from '../lib/types';
 
 export type GamePhase =
-  | 'idle'           // Not in a game
+  | 'idle'           // Initial state - show mode selection
   | 'placing'        // Placing ships
   | 'lobby'          // Ships placed, ready to create/join
   | 'waiting'        // Host waiting for guest to join
@@ -43,6 +43,9 @@ interface GameState {
   // Pending shot (for opponent to process)
   pendingShot: Shot | null;
 
+  // Last shot we made that needs verification
+  lastUnverifiedShot: Shot | null;
+
   // Actions
   setPhase: (phase: GamePhase) => void;
   setGameId: (gameId: string | null) => void;
@@ -50,11 +53,25 @@ interface GameState {
   setMyShips: (ships: ShipPlacement | null) => void;
   setMyBoard: (board: boolean[]) => void;
   recordMyShot: (shot: Shot, isHit: boolean) => void;
+  recordPendingShot: (shot: Shot) => void; // Record a shot as pending (unverified)
+  verifyPendingShot: (wasHit: boolean) => void; // Verify the pending shot as hit or miss
   recordOpponentShot: (shot: Shot) => void;
   setCurrentTurn: (turn: number) => void;
   setIsMyTurn: (isMyTurn: boolean) => void;
   setContractStatus: (status: GameStatus) => void;
   setPendingShot: (shot: Shot | null) => void;
+  // For reconnection - set multiple pieces of state at once
+  setReconnectionState: (state: {
+    gameId: string;
+    isHost: boolean;
+    currentTurn: number;
+    isMyTurn: boolean;
+    myHits: number;
+    opponentHits: number;
+    myShots: Shot[];
+    opponentShots: Shot[];
+    trackingBoard: CellState[];
+  }) => void;
   resetGame: () => void;
 }
 
@@ -77,6 +94,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   myHits: 0,
   opponentHits: 0,
   pendingShot: null,
+  lastUnverifiedShot: null,
 
   // Actions
   setPhase: (phase) => set({ phase }),
@@ -103,6 +121,37 @@ export const useGameStore = create<GameState>((set, get) => ({
     });
   },
 
+  // Record a shot as pending (unverified) - shown with a different visual state
+  recordPendingShot: (shot) => {
+    const { trackingBoard, myShots } = get();
+    const idx = shot.y * BOARD_SIZE + shot.x;
+
+    const newTrackingBoard = [...trackingBoard];
+    newTrackingBoard[idx] = 'pending';
+
+    set({
+      trackingBoard: newTrackingBoard,
+      myShots: [...myShots, shot],
+      lastUnverifiedShot: shot,
+    });
+  },
+
+  // Verify the pending shot as hit or miss when opponent's turn reveals the result
+  verifyPendingShot: (wasHit) => {
+    const { lastUnverifiedShot, trackingBoard, myHits } = get();
+    if (!lastUnverifiedShot) return;
+
+    const idx = lastUnverifiedShot.y * BOARD_SIZE + lastUnverifiedShot.x;
+    const newTrackingBoard = [...trackingBoard];
+    newTrackingBoard[idx] = wasHit ? 'hit' : 'miss';
+
+    set({
+      trackingBoard: newTrackingBoard,
+      myHits: wasHit ? myHits + 1 : myHits,
+      lastUnverifiedShot: null,
+    });
+  },
+
   recordOpponentShot: (shot) => {
     const { myBoard, opponentShots, opponentHits } = get();
     const idx = shot.y * BOARD_SIZE + shot.x;
@@ -122,6 +171,24 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setPendingShot: (shot) => set({ pendingShot: shot }),
 
+  // Set multiple pieces of state at once for reconnection
+  setReconnectionState: (state) =>
+    set({
+      gameId: state.gameId,
+      isHost: state.isHost,
+      currentTurn: state.currentTurn,
+      isMyTurn: state.isMyTurn,
+      myHits: state.myHits,
+      opponentHits: state.opponentHits,
+      myShots: state.myShots,
+      opponentShots: state.opponentShots,
+      trackingBoard: state.trackingBoard,
+      phase: 'playing',
+      contractStatus: 2, // STATUS_ACTIVE
+      lastUnverifiedShot: null,
+      pendingShot: null,
+    }),
+
   resetGame: () =>
     set({
       gameId: null,
@@ -138,5 +205,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       myHits: 0,
       opponentHits: 0,
       pendingShot: null,
+      lastUnverifiedShot: null,
     }),
 }));

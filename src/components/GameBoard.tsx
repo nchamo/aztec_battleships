@@ -25,7 +25,8 @@ export function GameBoard() {
     myHits,
     opponentHits,
     contractStatus,
-    recordMyShot,
+    recordPendingShot,
+    verifyPendingShot,
     recordOpponentShot,
     setIsMyTurn,
     setCurrentTurn,
@@ -78,7 +79,7 @@ export function GameBoard() {
           return;
         }
 
-        console.log(`[GameBoard] Opponent shot at (${shot.x}, ${shot.y})`);
+        console.log(`[GameBoard] Opponent shot at (${shot.x}, ${shot.y}), our previous shot was ${shot.opponentShotHit ? 'a HIT' : 'a MISS'}`);
 
         // Only process if we haven't processed this turn yet
         if (lastProcessedTurn.current >= opponentTurn) {
@@ -86,6 +87,10 @@ export function GameBoard() {
           return;
         }
         lastProcessedTurn.current = opponentTurn;
+
+        // Verify our previous pending shot with the result from opponent's turn
+        // The opponent_shot_hit field tells us if OUR previous shot was a hit
+        verifyPendingShot(shot.opponentShotHit);
 
         // Record opponent's shot
         recordOpponentShot(shot);
@@ -114,7 +119,7 @@ export function GameBoard() {
     const interval = setInterval(pollOpponentTurn, 3000);
 
     return () => clearInterval(interval);
-  }, [gameId, isMyTurn, phase, currentTurn, isHost, wasTurnPlayed, getTurn, getGameStatus, recordOpponentShot, setCurrentTurn, setIsMyTurn, setContractStatus, setPhase, isPolling]);
+  }, [gameId, isMyTurn, phase, currentTurn, isHost, wasTurnPlayed, getTurn, getGameStatus, recordOpponentShot, verifyPendingShot, setCurrentTurn, setIsMyTurn, setContractStatus, setPhase, isPolling]);
 
   // Check win conditions
   const isGameOver = phase === 'finished';
@@ -137,9 +142,9 @@ export function GameBoard() {
       // currentTurn is the turn we're about to play
       await shoot(gameId, currentTurn, selectedShot);
 
-      // For now, we don't know if it's a hit until opponent responds
-      // Mark as pending (we'll use 'miss' as placeholder until we get confirmation)
-      recordMyShot(selectedShot, false);
+      // Record as pending - we don't know if it's a hit until opponent responds
+      // The result will be revealed in the opponent's next turn via opponent_shot_hit
+      recordPendingShot(selectedShot);
 
       setSelectedShot(null);
       // After shooting, we wait for opponent's next turn (currentTurn + 1)

@@ -58,11 +58,18 @@ export function useWallet() {
     [setPlayerSlot]
   );
 
-  // Connect wallet for selected slot
-  const connect = useCallback(async () => {
-    if (!playerSlot) {
+  // Connect wallet for selected slot (can pass slot directly to avoid stale closure issues)
+  const connect = useCallback(async (slotOverride?: PlayerSlot) => {
+    const slot = slotOverride || playerSlot;
+
+    if (!slot) {
       setConnectionError('Please select a player slot first');
       return;
+    }
+
+    // Update the stored slot if an override was provided
+    if (slotOverride) {
+      setPlayerSlot(slotOverride);
     }
 
     if (pxeStatus !== 'connected') {
@@ -75,15 +82,17 @@ export function useWallet() {
     setConnectionStatus('loading_wallet');
 
     try {
-      const instance = await createOrLoadWallet(playerSlot, (status) => {
+      const instance = await createOrLoadWallet(slot, (status) => {
         setConnectionStatus(status);
       });
       setWalletInstance(instance);
+      setConnecting(false);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to connect wallet';
       setConnectionError(message);
+      setConnecting(false);
     }
-  }, [playerSlot, pxeStatus, setConnecting, setConnectionError, setConnectionStatus, setWalletInstance]);
+  }, [playerSlot, pxeStatus, setPlayerSlot, setConnecting, setConnectionError, setConnectionStatus, setWalletInstance]);
 
   // Disconnect wallet
   const disconnect = useCallback(() => {

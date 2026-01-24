@@ -132,12 +132,15 @@ describe("Battleships Contract", { timeout: 600000 }, () => {
         .simulate({ from: host });
       expect(turn1FromHost.shot.x).toBe(9n);
       expect(turn1FromHost.shot.y).toBe(9n);
+      // Guest's first shot has no previous opponent shot, so opponent_shot_hit should be false
+      expect(turn1FromHost.opponent_shot_hit).toBe(false);
 
       const turn1FromGuest = await contractGuest.methods
         .get_turn(gameId, 1)
         .simulate({ from: guest });
       expect(turn1FromGuest.shot.x).toBe(9n);
       expect(turn1FromGuest.shot.y).toBe(9n);
+      expect(turn1FromGuest.opponent_shot_hit).toBe(false);
 
       // Host and guest alternate shots
       // Host hits guest's ships, guest misses
@@ -162,12 +165,15 @@ describe("Battleships Contract", { timeout: 600000 }, () => {
           .simulate({ from: host });
         expect(hostTurnFromHost.shot.x).toBe(BigInt(hostShot.x));
         expect(hostTurnFromHost.shot.y).toBe(BigInt(hostShot.y));
+        // Guest always misses, so host's opponent_shot_hit should be false
+        expect(hostTurnFromHost.opponent_shot_hit).toBe(false);
 
         const hostTurnFromGuest = await contractGuest.methods
           .get_turn(gameId, turn)
           .simulate({ from: guest });
         expect(hostTurnFromGuest.shot.x).toBe(BigInt(hostShot.x));
         expect(hostTurnFromGuest.shot.y).toBe(BigInt(hostShot.y));
+        expect(hostTurnFromGuest.opponent_shot_hit).toBe(false);
 
         turn += 1;
 
@@ -194,12 +200,15 @@ describe("Battleships Contract", { timeout: 600000 }, () => {
             .simulate({ from: host });
           expect(guestTurnFromHost.shot.x).toBe(BigInt(guestShot.x));
           expect(guestTurnFromHost.shot.y).toBe(BigInt(guestShot.y));
+          // Host always hits, so guest's opponent_shot_hit should be true
+          expect(guestTurnFromHost.opponent_shot_hit).toBe(true);
 
           const guestTurnFromGuest = await contractGuest.methods
             .get_turn(gameId, turn)
             .simulate({ from: guest });
           expect(guestTurnFromGuest.shot.x).toBe(BigInt(guestShot.x));
           expect(guestTurnFromGuest.shot.y).toBe(BigInt(guestShot.y));
+          expect(guestTurnFromGuest.opponent_shot_hit).toBe(true);
         }
 
         turn += 1;
@@ -261,12 +270,15 @@ describe("Battleships Contract", { timeout: 600000 }, () => {
         .simulate({ from: host });
       expect(turn1FromHost.shot.x).toBe(BigInt(hostShipCells[0].x));
       expect(turn1FromHost.shot.y).toBe(BigInt(hostShipCells[0].y));
+      // Guest's first shot has no previous opponent shot, so opponent_shot_hit should be false
+      expect(turn1FromHost.opponent_shot_hit).toBe(false);
 
       const turn1FromGuest = await contractGuest.methods
         .get_turn(gameId, 1)
         .simulate({ from: guest });
       expect(turn1FromGuest.shot.x).toBe(BigInt(hostShipCells[0].x));
       expect(turn1FromGuest.shot.y).toBe(BigInt(hostShipCells[0].y));
+      expect(turn1FromGuest.opponent_shot_hit).toBe(false);
 
       // Guest needs to hit remaining 16 cells (already hit 1 in join_game)
       for (let i = 1; i < 17; i++) {
@@ -290,12 +302,15 @@ describe("Battleships Contract", { timeout: 600000 }, () => {
           .simulate({ from: host });
         expect(hostTurnFromHost.shot.x).toBe(BigInt(hostShot.x));
         expect(hostTurnFromHost.shot.y).toBe(BigInt(hostShot.y));
+        // Guest always hits, so host's opponent_shot_hit should be true
+        expect(hostTurnFromHost.opponent_shot_hit).toBe(true);
 
         const hostTurnFromGuest = await contractGuest.methods
           .get_turn(gameId, turn)
           .simulate({ from: guest });
         expect(hostTurnFromGuest.shot.x).toBe(BigInt(hostShot.x));
         expect(hostTurnFromGuest.shot.y).toBe(BigInt(hostShot.y));
+        expect(hostTurnFromGuest.opponent_shot_hit).toBe(true);
 
         turn += 1;
 
@@ -319,12 +334,15 @@ describe("Battleships Contract", { timeout: 600000 }, () => {
           .simulate({ from: host });
         expect(guestTurnFromHost.shot.x).toBe(BigInt(guestShot.x));
         expect(guestTurnFromHost.shot.y).toBe(BigInt(guestShot.y));
+        // Host always misses, so guest's opponent_shot_hit should be false
+        expect(guestTurnFromHost.opponent_shot_hit).toBe(false);
 
         const guestTurnFromGuest = await contractGuest.methods
           .get_turn(gameId, turn)
           .simulate({ from: guest });
         expect(guestTurnFromGuest.shot.x).toBe(BigInt(guestShot.x));
         expect(guestTurnFromGuest.shot.y).toBe(BigInt(guestShot.y));
+        expect(guestTurnFromGuest.opponent_shot_hit).toBe(false);
 
         turn += 1;
       }

@@ -127,7 +127,8 @@ contract Battleships {
             .initialize(BoardNote { board })
             .deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
 
-        self.internal.apply_my_shot(game_id, host, initial_shot, 1);
+        // Guest's first shot - no previous opponent shot to verify, so opponent_shot_hit is false
+        self.internal.apply_my_shot(game_id, host, initial_shot, 1, false);
 
         // Enqueue public function to start game        
         Battleships::at(self.address)
@@ -169,7 +170,7 @@ contract Battleships {
         let player = self.msg_sender();
         assert(turn_player == player, "Invalid player");
 
-        // Read opponent's turn 
+        // Read opponent's turn
         // Note: fetching the note would fail if it didn't exist
         let opponents_turn = self.storage.private_turns
             .at(game_id)
@@ -177,7 +178,7 @@ contract Battleships {
             .at(opponent)
             .get_note();
 
-        let did_i_lose = self.internal.verify_opponents_shot(game_id, opponents_turn.shot);
+        let (opponent_shot_hit, did_i_lose) = self.internal.verify_opponents_shot(game_id, opponents_turn.shot);
 
         if did_i_lose {
             let status = if turn % 2 == 0 { STATUS_WON_BY_GUEST } else { STATUS_WON_BY_HOST };
@@ -185,7 +186,8 @@ contract Battleships {
                 ._on_finished(game_id, status)
                 .enqueue(self.context);
         } else {
-            self.internal.apply_my_shot(game_id, opponent, shot, turn);
+            // Pass opponent_shot_hit so opponent learns if their previous shot was successful
+            self.internal.apply_my_shot(game_id, opponent, shot, turn, opponent_shot_hit);
 
             // Note: this leaks privacy. Other will know this transaction is for battleship playing
             Battleships::at(self.address)
@@ -219,8 +221,9 @@ contract Battleships {
             .write(end_status);
     }
 
+    // Returns (is_hit, did_i_lose)
     #[internal("private")]
-    fn verify_opponents_shot(game_id: GameId, opponent_shot: Shot) -> bool {
+    fn verify_opponents_shot(game_id: GameId, opponent_shot: Shot) -> (bool, bool) {
         let player = self.msg_sender();
 
         // Check if opponent hit any of my ships
@@ -232,7 +235,7 @@ contract Battleships {
         let idx = opponent_shot.y * BOARD_SIZE + opponent_shot.x;
         let is_hit = my_board[idx as u32];
 
-        let lost = &mut false; 
+        let lost = &mut false;
         if is_hit {
             // Read & update counter
             self.storage.private_hit_counter
@@ -240,13 +243,13 @@ contract Battleships {
                 .at(player)
                 .replace(|current| {
                     *lost = current.value == (TOTAL_SHIP_CELLS as u128) - 1;
-                    
-                    UintNote { value: current.value + 1 }                    
+
+                    UintNote { value: current.value + 1 }
                 })
                 .deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
         }
 
-        *lost
+        (is_hit, *lost)
     }    
 
     #[internal("private")]
@@ -254,7 +257,8 @@ contract Battleships {
         game_id: GameId,
         opponent: AztecAddress,
         shot: Shot,
-        turn: u32
+        turn: u32,
+        opponent_shot_hit: bool, // Whether the opponent's previous shot was a hit (false for guest's first shot)
     ) {
         let player = self.msg_sender();
         let timestamp = self.context.get_anchor_block_header().global_variables.timestamp;
@@ -272,7 +276,7 @@ contract Battleships {
             .at(game_id)
             .at(turn)
             .at(player)
-            .initialize(PlayedTurnNote { shot, timestamp });
+            .initialize(PlayedTurnNote { shot, timestamp, opponent_shot_hit });
         note_message.deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
         note_message.deliver_to(opponent, MessageDelivery.ONCHAIN_CONSTRAINED);
         
@@ -365,6 +369,15 @@ contract Battleships {
             .at(game_id)
             .at(turn)
             .at(turn_player)
+            .view_note()
+    }
+
+    // Get the caller's board for a game (for reconnection)
+    #[external("utility")]
+    unconstrained fn get_my_board(game_id: GameId, player: AztecAddress) -> BoardNote {
+        self.storage.private_board
+            .at(game_id)
+            .at(player)
             .view_note()
     }
 

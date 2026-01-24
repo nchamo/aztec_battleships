@@ -31,6 +31,7 @@ export function Cell({
     if (state === 'hit') return 'bg-red-600';
     if (state === 'miss') return 'bg-gray-500';
     if (state === 'sunk') return 'bg-red-800';
+    if (state === 'pending') return 'bg-yellow-600 animate-pulse';
     if (isShip) return 'bg-blue-600';
     return 'bg-gray-700';
   };
@@ -67,6 +68,7 @@ export function Cell({
     >
       {state === 'hit' && <span className="text-white">X</span>}
       {state === 'miss' && <span className="text-gray-300">•</span>}
+      {state === 'pending' && <span className="text-white">?</span>}
     </button>
   );
 }

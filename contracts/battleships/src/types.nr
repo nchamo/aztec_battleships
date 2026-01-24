@@ -92,7 +92,8 @@ impl Shot {
 #[custom_note]
 pub struct PlayedTurnNote {
     pub shot: Shot,
-    pub timestamp: u64
+    pub timestamp: u64,
+    pub opponent_shot_hit: bool, // Whether the opponent's previous shot was a hit (false for guest's first shot)
 }
 
 impl NoteHash for PlayedTurnNote {
