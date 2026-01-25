@@ -1,12 +1,114 @@
-use crate::types::{ShipData, ShipPlacement, Shot};
-use crate::utils::{expand_ship, validate_shot, validate_and_build_board};
-use crate::test::helpers::{
-    create_valid_ships, create_valid_ships_player2, create_overlapping_ships,    
-};
+use crate::types::{GameId, Turn, ShipData, ShipPlacement, Shot, BOARD_SIZE, SHIP_SIZES, TOTAL_CELLS, Coordinate};
+use aztec::{
+        protocol_types::{traits::ToField, hash::poseidon2_hash_with_separator},
+    };
+
+
+pub fn build_nullifier(game_id: GameId, turn: Turn) -> Field {
+    // Note: this leaks privacy. We should introduce a shared secret or randomness between players so that third parties 
+    //       can't check which turns have been played
+    poseidon2_hash_with_separator(
+        [game_id.to_field(), turn as Field],
+        1,
+    )
+}
+
+// Expand a ship to its cell coordinates
+pub fn expand_ship(ship: ShipData, length: u8) -> [(Coordinate, Coordinate); 5] {
+    assert((ship.orientation == 0) | (ship.orientation == 1), "Invalid orientation");
+
+    let mut cells = [(0, 0); 5];
+
+    for i in 0..length {
+        let cell = if ship.orientation == 0 {
+            // Horizontal
+            (ship.x + i, ship.y)
+        } else {
+            // Vertical
+            (ship.x, ship.y + i)
+        };
+
+        assert(cell.0 < BOARD_SIZE, "Ship out of bounds");
+        assert(cell.1 < BOARD_SIZE, "Ship out of bounds");
+
+        cells[i as u32] = cell;
+    }
+
+    cells
+}
+
+// Validate a shot is within board bounds
+pub fn validate_shot(shot: Shot) {
+    assert(shot.x < BOARD_SIZE, "Shot x out of bounds");
+    assert(shot.y < BOARD_SIZE, "Shot y out of bounds");
+}
+
+// Helper function to mark ship cells on a board. It will return if there was a collision
+fn mark_cells(board: &mut [bool; TOTAL_CELLS], cells: [(u8, u8); 5], length: u8) -> bool {
+    let mut collision = false;
+    for i in 0..length {
+        let idx = (cells[i as u32].1 * BOARD_SIZE + cells[i as u32].0) as u32;
+        collision = collision | board[idx];
+        board[idx] = true;
+    }
+    collision
+}
+
+pub fn validate_and_build_board(ships: ShipPlacement) -> [bool; TOTAL_CELLS] {
+    let carrier_cells = expand_ship(ships.carrier, SHIP_SIZES[0]);
+    let battleship_cells = expand_ship(ships.battleship, SHIP_SIZES[1]);
+    let cruiser_cells = expand_ship(ships.cruiser, SHIP_SIZES[2]);
+    let submarine_cells = expand_ship(ships.submarine, SHIP_SIZES[3]);
+    let destroyer_cells = expand_ship(ships.destroyer, SHIP_SIZES[4]);
+
+    let mut board = [false; TOTAL_CELLS];
+    let mut collision = mark_cells(&mut board, carrier_cells, SHIP_SIZES[0]);
+    collision = collision | mark_cells(&mut board, battleship_cells, SHIP_SIZES[1]);
+    collision = collision | mark_cells(&mut board, cruiser_cells, SHIP_SIZES[2]);
+    collision = collision | mark_cells(&mut board, submarine_cells, SHIP_SIZES[3]);
+    collision = collision | mark_cells(&mut board, destroyer_cells, SHIP_SIZES[4]);
+
+    assert(!collision, "Ships overlap");
+
+    board
+}
 
 // ============================================================================
-// expand_ship() tests
+// UNIT TESTS
 // ============================================================================
+
+// Helper functions for unit tests
+fn create_valid_ships_for_test() -> ShipPlacement {
+    ShipPlacement {
+        carrier: ShipData { x: 0, y: 0, orientation: 0 },     // (0,0)-(4,0) horizontal
+        battleship: ShipData { x: 0, y: 1, orientation: 0 },  // (0,1)-(3,1) horizontal
+        cruiser: ShipData { x: 0, y: 2, orientation: 0 },     // (0,2)-(2,2) horizontal
+        submarine: ShipData { x: 0, y: 3, orientation: 0 },   // (0,3)-(2,3) horizontal
+        destroyer: ShipData { x: 0, y: 4, orientation: 0 },   // (0,4)-(1,4) horizontal
+    }
+}
+
+fn create_valid_ships_player2_for_test() -> ShipPlacement {
+    ShipPlacement {
+        carrier: ShipData { x: 5, y: 5, orientation: 1 },     // (5,5)-(5,9) vertical
+        battleship: ShipData { x: 6, y: 5, orientation: 1 },  // (6,5)-(6,8) vertical
+        cruiser: ShipData { x: 7, y: 5, orientation: 1 },     // (7,5)-(7,7) vertical
+        submarine: ShipData { x: 8, y: 5, orientation: 1 },   // (8,5)-(8,7) vertical
+        destroyer: ShipData { x: 9, y: 5, orientation: 1 },   // (9,5)-(9,6) vertical
+    }
+}
+
+fn create_overlapping_ships_for_test() -> ShipPlacement {
+    ShipPlacement {
+        carrier: ShipData { x: 0, y: 0, orientation: 0 },
+        battleship: ShipData { x: 0, y: 0, orientation: 0 },  // Same position as carrier!
+        cruiser: ShipData { x: 5, y: 5, orientation: 0 },
+        submarine: ShipData { x: 6, y: 6, orientation: 0 },
+        destroyer: ShipData { x: 7, y: 7, orientation: 0 },
+    }
+}
+
+// expand_ship() tests
 
 #[test]
 unconstrained fn test_expand_ship_horizontal() {
@@ -57,9 +159,7 @@ unconstrained fn test_expand_ship_at_edge() {
     assert((cells[1].0 == 9) & (cells[1].1 == 9), "Cell 1 incorrect");
 }
 
-// ============================================================================
 // validate_shot() tests
-// ============================================================================
 
 #[test]
 unconstrained fn test_validate_shot_valid() {
@@ -91,13 +191,11 @@ unconstrained fn test_validate_shot_both_out_of_bounds() {
     validate_shot(shot);
 }
 
-// ============================================================================
 // validate_and_build_board() tests
-// ============================================================================
 
 #[test]
 unconstrained fn test_validate_and_build_board_valid_ships() {
-    let ships = create_valid_ships();
+    let ships = create_valid_ships_for_test();
     let board = validate_and_build_board(ships);
 
     // Verify carrier cells (0,0)-(4,0) are marked
@@ -123,13 +221,13 @@ unconstrained fn test_validate_and_build_board_valid_ships() {
 
 #[test(should_fail_with = "Ships overlap")]
 unconstrained fn test_validate_and_build_board_overlapping() {
-    let ships = create_overlapping_ships();
-    let _ = validate_and_build_board(ships); 
+    let ships = create_overlapping_ships_for_test();
+    let _ = validate_and_build_board(ships);
 }
 
 #[test]
 unconstrained fn test_validate_and_build_board_vertical_ships() {
-    let ships = create_valid_ships_player2();
+    let ships = create_valid_ships_player2_for_test();
     let board = validate_and_build_board(ships);
 
     // Carrier is vertical at (5,5)-(5,9): indices 55,65,75,85,95
@@ -157,7 +255,7 @@ unconstrained fn test_validate_and_build_board_extends_past_edge() {
 
 #[test]
 unconstrained fn test_validate_and_build_board_count_cells() {
-    let ships = create_valid_ships();
+    let ships = create_valid_ships_for_test();
     let board = validate_and_build_board(ships);
 
     // Count total marked cells (should be 17)

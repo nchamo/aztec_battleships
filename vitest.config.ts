@@ -19,7 +19,7 @@ export default defineConfig({
   },
   test: {
     // Test files pattern
-    include: ['src/test/**/*.test.ts'],
+    include: ['contracts/battleships/e2e/**/*.test.ts'],
 
     // aztec sandbox tests take quite some time
     hookTimeout: 200000,

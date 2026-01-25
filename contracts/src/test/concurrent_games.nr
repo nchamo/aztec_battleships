@@ -3,7 +3,7 @@ use dep::aztec::{
 };
 use crate::Battleships;
 use crate::types::{Shot, GameId, STATUS_CREATED, STATUS_ACTIVE};
-use crate::test::helpers::{create_valid_ships, create_valid_ships_player2};
+use crate::test::utils::{create_valid_ships, create_valid_ships_player2};
 
 // Test that multiple concurrent games with different GameIds can exist
 #[test]

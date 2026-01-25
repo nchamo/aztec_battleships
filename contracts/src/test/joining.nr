@@ -3,7 +3,7 @@ use dep::aztec::{
 };
 use crate::Battleships;
 use crate::types::{Shot, GameId, STATUS_WON_BY_HOST, TURN_TIMEOUT};
-use crate::test::helpers::{create_valid_ships, create_valid_ships_player2};
+use crate::test::utils::{create_valid_ships, create_valid_ships_player2};
 
 // Test that joining a non-existent game fails
 #[test(should_fail)]

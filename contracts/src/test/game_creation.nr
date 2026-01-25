@@ -2,8 +2,8 @@ use dep::aztec::{
     test::helpers::test_environment::TestEnvironment,
 };
 use crate::Battleships;
-use crate::types::{GameId};
-use crate::test::helpers::{create_valid_ships};
+use crate::types::GameId;
+use crate::test::utils::create_valid_ships;
 
 // Test that creating a game with an existing GameId should fail
 #[test(should_fail_with = "duplicate siloed nullifier")]

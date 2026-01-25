@@ -1,4 +1,4 @@
-import { BattleshipsContract } from "../artifacts/Battleships.js";
+import { BattleshipsContract } from "../../src/artifacts/Battleships.js";
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import { TestWallet } from "@aztec/test-wallet/server";
 import { AztecNode, createAztecNodeClient } from "@aztec/aztec.js/node";
