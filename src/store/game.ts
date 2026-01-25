@@ -71,6 +71,7 @@ interface GameState {
     myShots: Shot[];
     opponentShots: Shot[];
     trackingBoard: CellState[];
+    lastUnverifiedShot: Shot | null;
   }) => void;
   resetGame: () => void;
 }
@@ -185,7 +186,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       trackingBoard: state.trackingBoard,
       phase: 'playing',
       contractStatus: 2, // STATUS_ACTIVE
-      lastUnverifiedShot: null,
+      lastUnverifiedShot: state.lastUnverifiedShot,
       pendingShot: null,
     }),
 

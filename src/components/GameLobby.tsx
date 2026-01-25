@@ -15,7 +15,7 @@ export function GameLobby() {
   const [initialShot, setInitialShot] = useState<Shot | null>(null);
   const [showShotSelector, setShowShotSelector] = useState(false);
 
-  const isHost = playerSlot === 'player1';
+  const isHost = playerSlot === 'host';
 
   // Handle create game (host)
   const handleCreateGame = async () => {
@@ -63,24 +63,20 @@ export function GameLobby() {
           Click where you want your first shot to land on the opponent's board
         </p>
 
-        <div className="bg-gray-800 rounded-lg p-4 mb-6">
+        <div className="bg-gray-800/50 rounded-xl p-5 backdrop-blur">
           <Grid
-            trackingBoard={Array(BOARD_SIZE * BOARD_SIZE).fill('empty').map((_, idx) => {
-              const x = idx % BOARD_SIZE;
-              const y = Math.floor(idx / BOARD_SIZE);
-              if (initialShot && initialShot.x === x && initialShot.y === y) {
-                return 'hit'; // Show selected cell
-              }
-              return 'empty';
-            })}
+            trackingBoard={Array(BOARD_SIZE * BOARD_SIZE).fill('empty')}
             onCellClick={(x, y) => setInitialShot({ x, y })}
-            title="Select Shot Location"
+            title="Enemy Waters"
+            boardType="opponentBoard"
+            isMyTurn={true}
+            selectedCell={initialShot}
           />
         </div>
 
         {initialShot && (
           <p className="text-sm text-gray-400 mb-4">
-            Selected: ({String.fromCharCode(65 + initialShot.x)}, {initialShot.y + 1})
+            Selected: {String.fromCharCode(65 + initialShot.x)}{initialShot.y + 1}
           </p>
         )}
 
@@ -122,14 +118,14 @@ export function GameLobby() {
 
       <div className="flex flex-col md:flex-row gap-8 items-start">
         {/* My board preview */}
-        <div className="bg-gray-800 rounded-lg p-4">
-          <Grid board={myBoard} disabled title="Your Ships" />
+        <div className="bg-gray-800/50 rounded-xl p-5 backdrop-blur">
+          <Grid board={myBoard} disabled title="Your Fleet" boardType="myBoard" />
         </div>
 
         {/* Game ID form */}
-        <div className="bg-gray-800 rounded-lg p-6 min-w-80">
-          <h3 className="font-semibold mb-4">
-            {isHost ? 'Create Game' : 'Join Game'}
+        <div className="bg-gray-800/50 rounded-xl p-6 backdrop-blur min-w-80">
+          <h3 className="font-bold mb-4 text-lg text-blue-400">
+            {isHost ? '🚀 Create Game' : '🎯 Join Game'}
           </h3>
 
           <div className="mb-4">

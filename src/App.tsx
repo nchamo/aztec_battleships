@@ -5,6 +5,7 @@ import { GameLobby } from './components/GameLobby';
 import { GameBoard } from './components/GameBoard';
 import { useWallet } from './hooks/useWallet';
 import { useGameStore } from './store/game';
+import { useWalletStore } from './store/wallet';
 import { useContract } from './hooks/useContract';
 import { getPXE } from './services/pxe';
 import { STATUS_ACTIVE } from './lib/types';
@@ -12,16 +13,20 @@ import { STATUS_ACTIVE } from './lib/types';
 export default function App() {
   const { isConnected } = useWallet();
   const phase = useGameStore((state) => state.phase);
+  const isReconnecting = useWalletStore((state) => state.isReconnecting);
+  const gameAction = useWalletStore((state) => state.gameAction);
 
-  // Not connected - show wallet connect
-  if (!isConnected) {
+  // Not connected, reconnecting, or no action selected - show wallet connect full-screen
+  if (!isConnected || isReconnecting || !gameAction) {
     return <WalletConnect />;
   }
 
   // Connected - render based on game phase
   return (
-    <div className="min-h-screen p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen p-4 md:p-8 relative">
+      {/* Ocean particles effect layer */}
+      <div className="ocean-particles" />
+      <div className="max-w-6xl mx-auto relative z-10">
         {/* Header with wallet info */}
         <WalletConnect />
 
@@ -120,17 +125,20 @@ function WaitingForOpponent() {
 
   return (
     <div className="flex flex-col items-center justify-center py-12">
-      <div className="bg-gray-800 rounded-lg p-8 text-center max-w-md">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-6" />
-        <h2 className="text-xl font-semibold mb-2">Waiting for Opponent</h2>
+      <div className="bg-gray-800/50 rounded-xl p-8 text-center max-w-md backdrop-blur">
+        <div className="relative w-16 h-16 mx-auto mb-6">
+          <div className="animate-ping absolute inset-0 rounded-full bg-blue-500/30" />
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-blue-500/30 border-t-blue-500" />
+        </div>
+        <h2 className="text-xl font-bold mb-2 text-blue-400">Waiting for Opponent</h2>
         <p className="text-gray-400 mb-4">
           Share this game ID with another player:
         </p>
-        <div className="bg-gray-900 rounded-lg p-3 font-mono text-lg mb-4">
+        <div className="bg-gray-900/80 rounded-lg p-4 font-mono text-lg mb-4 text-green-400 border border-gray-700">
           {gameId}
         </div>
         <p className="text-sm text-gray-500">
-          They should select "Player 2" and join with this ID
+          They should select "Join Game" and enter this ID
         </p>
       </div>
     </div>

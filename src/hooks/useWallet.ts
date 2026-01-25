@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { useWalletStore } from '../store/wallet';
 import { useGameStore } from '../store/game';
 import { getPXE } from '../services/pxe';
-import { createOrLoadWallet } from '../services/wallet';
+import { createOrLoadWallet, WALLET_SEED_STORAGE_KEY, DEFAULT_WALLET_SEED } from '../services/wallet';
 import type { PlayerSlot } from '../lib/types';
 
 export function useWallet() {
   const {
     pxeStatus,
     pxeError,
+    seed,
     playerSlot,
     walletInstance,
     address,
@@ -16,6 +18,7 @@ export function useWallet() {
     connectionStatus,
     connectionError,
     setPXEStatus,
+    setSeed,
     setPlayerSlot,
     setWalletInstance,
     setConnecting,
@@ -50,41 +53,44 @@ export function useWallet() {
     initPXE();
   }, [pxeStatus, setPXEStatus]);
 
-  // Select player slot
-  const selectSlot = useCallback(
-    (slot: PlayerSlot) => {
-      setPlayerSlot(slot);
-    },
-    [setPlayerSlot]
-  );
+  // Get stored seed from localStorage
+  const getStoredSeed = useCallback((): string | null => {
+    return localStorage.getItem(WALLET_SEED_STORAGE_KEY);
+  }, []);
 
-  // Connect wallet for selected slot (can pass slot directly to avoid stale closure issues)
-  const connect = useCallback(async (slotOverride?: PlayerSlot) => {
-    const slot = slotOverride || playerSlot;
+  // Save seed to localStorage
+  const saveSeed = useCallback((seedValue: string) => {
+    localStorage.setItem(WALLET_SEED_STORAGE_KEY, seedValue);
+  }, []);
 
-    if (!slot) {
-      setConnectionError('Please select a player slot first');
-      return;
-    }
-
-    // Update the stored slot if an override was provided
-    if (slotOverride) {
-      setPlayerSlot(slotOverride);
-    }
+  // Connect wallet with a seed - role will be determined by action selection
+  const connect = useCallback(async (seedInput: string, role: PlayerSlot) => {
+    // Use provided seed or fall back to default
+    const seedToUse = seedInput.trim() || DEFAULT_WALLET_SEED;
 
     if (pxeStatus !== 'connected') {
       setConnectionError('PXE not connected');
       return;
     }
 
-    setConnecting(true);
-    setConnectionError(null);
-    setConnectionStatus('loading_wallet');
+    // Save seed to localStorage
+    saveSeed(seedToUse);
+
+    // Use flushSync to ensure React renders the loading state immediately
+    flushSync(() => {
+      setConnecting(true);
+      setConnectionError(null);
+      setConnectionStatus('loading_wallet');
+      setSeed(seedToUse);
+    });
 
     try {
-      const instance = await createOrLoadWallet(slot, (status) => {
-        setConnectionStatus(status);
+      const instance = await createOrLoadWallet(seedToUse, role, (status) => {
+        flushSync(() => {
+          setConnectionStatus(status);
+        });
       });
+
       setWalletInstance(instance);
       setConnecting(false);
     } catch (error) {
@@ -92,7 +98,22 @@ export function useWallet() {
       setConnectionError(message);
       setConnecting(false);
     }
-  }, [playerSlot, pxeStatus, setPlayerSlot, setConnecting, setConnectionError, setConnectionStatus, setWalletInstance]);
+  }, [pxeStatus, saveSeed, setConnecting, setConnectionError, setConnectionStatus, setSeed, setWalletInstance]);
+
+  // Switch role (reconnect with same seed but different role)
+  const switchRole = useCallback(async (newRole: PlayerSlot) => {
+    if (!seed) {
+      setConnectionError('No seed available');
+      return;
+    }
+
+    // Disconnect current wallet
+    disconnectStore();
+    resetGame();
+
+    // Reconnect with the new role
+    await connect(seed, newRole);
+  }, [seed, connect, disconnectStore, resetGame, setConnectionError]);
 
   // Disconnect wallet
   const disconnect = useCallback(() => {
@@ -106,9 +127,13 @@ export function useWallet() {
     pxeError,
     isPXEConnected: pxeStatus === 'connected',
 
-    // Slot selection
+    // Seed
+    seed,
+    getStoredSeed,
+
+    // Slot/role selection
     playerSlot,
-    selectSlot,
+    setPlayerSlot,
 
     // Wallet state
     walletInstance,
@@ -120,6 +145,7 @@ export function useWallet() {
 
     // Actions
     connect,
+    switchRole,
     disconnect,
   };
 }

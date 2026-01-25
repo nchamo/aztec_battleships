@@ -20,6 +20,17 @@
   --border: 217.2 32.6% 17.5%;
   --input: 217.2 32.6% 17.5%;
   --ring: 224.3 76.3% 48%;
+
+  /* Game colors */
+  --ocean-dark: #0f172a;
+  --ocean-mid: #1e3a5f;
+  --ocean-light: #2563eb;
+  --ship-primary: #4b5563;
+  --ship-secondary: #374151;
+  --hit-primary: #dc2626;
+  --hit-glow: rgba(220, 38, 38, 0.4);
+  --miss-primary: #6b7280;
+  --pending-primary: #f59e0b;
 }
 
 * {
@@ -33,11 +44,262 @@ body {
     Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: hsl(var(--background));
+  background:
+    /* Fog/mist overlay at top */
+    linear-gradient(180deg,
+      rgba(15, 23, 42, 0.95) 0%,
+      rgba(15, 23, 42, 0.7) 15%,
+      transparent 40%
+    ),
+    /* Dark vignette */
+    radial-gradient(ellipse at center, transparent 0%, rgba(0, 0, 0, 0.4) 100%),
+    /* Ocean gradient */
+    linear-gradient(180deg,
+      #0a1628 0%,
+      #0f2744 20%,
+      #1a4a6e 45%,
+      #0d3a5c 65%,
+      #0a2a45 80%,
+      #051525 100%
+    );
+  background-attachment: fixed;
   color: hsl(var(--foreground));
   min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Ship silhouettes layer */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1920 1080'%3E%3Cdefs%3E%3ClinearGradient id='fog' x1='0%25' y1='0%25' x2='0%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%230a1628' stop-opacity='0.8'/%3E%3Cstop offset='100%25' stop-color='%230a1628' stop-opacity='0'/%3E%3C/linearGradient%3E%3C/defs%3E%3C!-- Distant battleship silhouette on left --%3E%3Cg opacity='0.15' transform='translate(100, 280)'%3E%3Cpath d='M0 50 L20 50 L25 40 L35 40 L35 30 L45 30 L50 25 L55 25 L55 30 L70 30 L75 35 L85 35 L90 30 L100 30 L105 35 L130 35 L135 30 L145 30 L150 40 L180 40 L185 50 L200 50 L200 60 L0 60 Z' fill='%231a3a5a'/%3E%3Crect x='40' y='15' width='8' height='15' fill='%231a3a5a'/%3E%3Crect x='80' y='10' width='6' height='20' fill='%231a3a5a'/%3E%3Crect x='120' y='12' width='7' height='18' fill='%231a3a5a'/%3E%3C/g%3E%3C!-- Distant battleship silhouette on right --%3E%3Cg opacity='0.12' transform='translate(1500, 320)'%3E%3Cpath d='M0 50 L15 50 L20 45 L40 45 L45 35 L60 35 L65 30 L80 30 L85 25 L100 25 L105 30 L120 30 L125 35 L150 35 L155 45 L180 45 L185 50 L200 50 L200 60 L0 60 Z' fill='%231a3a5a'/%3E%3Crect x='55' y='10' width='6' height='20' fill='%231a3a5a'/%3E%3Crect x='90' y='5' width='8' height='20' fill='%231a3a5a'/%3E%3Crect x='130' y='15' width='5' height='20' fill='%231a3a5a'/%3E%3C/g%3E%3C!-- Aircraft carrier silhouette center-back --%3E%3Cg opacity='0.08' transform='translate(700, 200)'%3E%3Cpath d='M0 60 L30 60 L35 50 L50 50 L50 40 L350 40 L350 50 L365 50 L370 60 L400 60 L400 70 L0 70 Z' fill='%231a3a5a'/%3E%3Crect x='60' y='20' width='280' height='20' fill='%231a3a5a'/%3E%3Crect x='150' y='5' width='8' height='15' fill='%231a3a5a'/%3E%3Crect x='250' y='8' width='6' height='12' fill='%231a3a5a'/%3E%3C/g%3E%3C!-- Destroyer silhouette far right --%3E%3Cg opacity='0.1' transform='translate(1650, 400)'%3E%3Cpath d='M0 30 L10 30 L15 25 L25 25 L30 20 L50 20 L55 25 L80 25 L85 30 L100 30 L100 40 L0 40 Z' fill='%231a3a5a'/%3E%3Crect x='35' y='8' width='5' height='12' fill='%231a3a5a'/%3E%3C/g%3E%3C!-- Submarine silhouette bottom left --%3E%3Cg opacity='0.06' transform='translate(50, 600)'%3E%3Cellipse cx='75' cy='20' rx='75' ry='15' fill='%231a3a5a'/%3E%3Crect x='60' y='5' width='8' height='15' rx='2' fill='%231a3a5a'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  pointer-events: none;
+  z-index: -2;
+}
+
+/* Ocean waves and atmospheric effects */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image:
+    /* Subtle moon glow */
+    radial-gradient(ellipse 300px 300px at 85% 15%, rgba(200, 220, 255, 0.03) 0%, transparent 70%),
+    /* Water reflection highlights */
+    radial-gradient(ellipse at 20% 70%, rgba(30, 80, 130, 0.2) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(30, 80, 130, 0.15) 0%, transparent 40%),
+    /* Animated wave pattern */
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 60px,
+      rgba(50, 120, 180, 0.04) 60px,
+      rgba(50, 120, 180, 0.04) 62px
+    ),
+    /* Horizontal wave lines */
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 200px,
+      rgba(50, 120, 180, 0.02) 200px,
+      rgba(50, 120, 180, 0.02) 202px
+    );
+  pointer-events: none;
+  z-index: -1;
+  animation: ocean-swell 15s ease-in-out infinite;
+}
+
+@keyframes ocean-swell {
+  0%, 100% {
+    transform: translateY(0) scaleY(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translateY(-5px) scaleY(1.01);
+    opacity: 0.95;
+  }
+}
+
+/* Additional floating particles/spray effect */
+.ocean-particles {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: -1;
+  background-image:
+    radial-gradient(1px 1px at 10% 30%, rgba(255, 255, 255, 0.1) 50%, transparent 100%),
+    radial-gradient(1px 1px at 30% 50%, rgba(255, 255, 255, 0.08) 50%, transparent 100%),
+    radial-gradient(1px 1px at 50% 20%, rgba(255, 255, 255, 0.1) 50%, transparent 100%),
+    radial-gradient(1px 1px at 70% 60%, rgba(255, 255, 255, 0.06) 50%, transparent 100%),
+    radial-gradient(1px 1px at 90% 40%, rgba(255, 255, 255, 0.08) 50%, transparent 100%);
 }
 
 #root {
   min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(30, 58, 95, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(37, 99, 235, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(37, 99, 235, 0.7);
+}
+
+/* Game title styling */
+.game-title {
+  text-shadow:
+    0 0 10px rgba(37, 99, 235, 0.5),
+    0 0 20px rgba(37, 99, 235, 0.3),
+    0 0 30px rgba(37, 99, 235, 0.2);
+}
+
+/* Hit glow effect */
+.hit-glow {
+  box-shadow:
+    0 0 10px var(--hit-glow),
+    0 0 20px var(--hit-glow),
+    inset 0 0 10px rgba(220, 38, 38, 0.3);
+}
+
+/* Radar sweep animation */
+@keyframes radar-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.radar-sweep {
+  animation: radar-sweep 2s linear infinite;
+}
+
+/* Button hover effects */
+.btn-game {
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-game::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.2),
+    transparent
+  );
+  transition: left 0.5s ease;
+}
+
+.btn-game:hover::before {
+  left: 100%;
+}
+
+/* Crosshair cursor for interactive cells */
+.cursor-crosshair {
+  cursor: crosshair;
+}
+
+/* Selection glow animation */
+@keyframes selection-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.3), 0 0 10px rgba(239, 68, 68, 0.5);
+  }
+}
+
+.selection-pulse {
+  animation: selection-pulse 1s ease-in-out infinite;
+}
+
+/* Victory/defeat animations */
+@keyframes victory-bounce {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+}
+
+.victory-text {
+  animation: victory-bounce 0.5s ease-in-out;
+}
+
+/* Ship placement preview */
+.ship-preview {
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.ship-preview:hover {
+  opacity: 1;
+}
+
+/* Grid cell transitions */
+.grid-cell {
+  transition: all 0.15s ease;
+}
+
+.grid-cell:hover:not(:disabled) {
+  transform: scale(1.05);
+  z-index: 10;
+}
+
+/* Loading shimmer effect */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.loading-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(30, 58, 95, 0.3) 0%,
+    rgba(37, 99, 235, 0.3) 50%,
+    rgba(30, 58, 95, 0.3) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
 }

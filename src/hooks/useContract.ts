@@ -591,11 +591,13 @@ export function useContract() {
         }
 
         // If my last shot is still unverified (opponent hasn't played yet), mark as pending
+        let lastUnverifiedShot: Shot | null = null;
         if (myShots.length > 0) {
           const lastMyShot = myShots[myShots.length - 1];
           const lastIdx = lastMyShot.y * BOARD_SIZE + lastMyShot.x;
           if (trackingBoard[lastIdx] === 'empty') {
             trackingBoard[lastIdx] = 'pending';
+            lastUnverifiedShot = lastMyShot;
           }
         }
 
@@ -606,6 +608,10 @@ export function useContract() {
         console.log('[Contract] Next turn:', nextTurn, 'Is my turn:', isMyTurnNext);
         console.log('[Contract] My shots:', myShots.length, 'Opponent shots:', opponentShots.length);
         console.log('[Contract] My hits:', myHits, 'Opponent hits:', opponentHits);
+        console.log('[Contract] Tracking board hits:', trackingBoard.filter(c => c === 'hit').length);
+        console.log('[Contract] Tracking board misses:', trackingBoard.filter(c => c === 'miss').length);
+        console.log('[Contract] Tracking board pending:', trackingBoard.filter(c => c === 'pending').length);
+        console.log('[Contract] Opponent shots on my board:', opponentShots.length);
 
         // 8. Set the reconnection state
         setReconnectionState({
@@ -618,6 +624,7 @@ export function useContract() {
           myShots,
           opponentShots,
           trackingBoard,
+          lastUnverifiedShot,
         });
 
         console.log('[Contract] Reconnection complete!');

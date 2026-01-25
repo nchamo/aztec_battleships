@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Grid } from './Grid';
 import { useGameStore } from '../store/game';
 import type { ShipPlacement as ShipPlacementType, ShipData, ShipName, Orientation } from '../lib/types';
@@ -20,6 +20,22 @@ export function ShipPlacement() {
   const [currentShip, setCurrentShip] = useState<ShipName>('carrier');
   const [orientation, setOrientation] = useState<Orientation>(0);
   const [hoverCell, setHoverCell] = useState<{ x: number; y: number } | null>(null);
+
+  // Check if all ships are placed
+  const allPlaced = SHIP_NAMES.every((name) => placement[name]);
+
+  // Handle keyboard events for rotation
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (allPlaced) return;
+    if (e.key === 'r' || e.key === 'R') {
+      setOrientation((prev) => (prev === 0 ? 1 : 0) as Orientation);
+    }
+  }, [allPlaced]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleKeyDown]);
 
   // Calculate preview cells
   const previewCells = useMemo(() => {
@@ -139,17 +155,15 @@ export function ShipPlacement() {
     setPhase('lobby');
   };
 
-  // Check if all ships are placed
-  const allPlaced = SHIP_NAMES.every((name) => placement[name]);
-
   return (
     <div className="flex flex-col items-center py-8">
-      <h2 className="text-2xl font-bold mb-2">Place Your Ships</h2>
-      <p className="text-gray-400 mb-6">Click on the grid to place each ship</p>
+      <h2 className="text-2xl font-bold mb-2 game-title">Place Your Ships</h2>
+      <p className="text-gray-400 mb-6">Click on the grid to position your fleet</p>
 
       <div className="flex flex-col md:flex-row gap-8 items-start">
         {/* Grid */}
         <div
+          className="bg-gray-800/50 rounded-xl p-5 backdrop-blur"
           onMouseLeave={() => setHoverCell(null)}
         >
           <Grid
@@ -159,12 +173,14 @@ export function ShipPlacement() {
             onCellClick={handleCellClick}
             onCellHover={(x, y) => setHoverCell({ x, y })}
             disabled={allPlaced}
+            title="Your Fleet"
+            boardType="myBoard"
           />
         </div>
 
         {/* Ship list and controls */}
-        <div className="bg-gray-800 rounded-lg p-4 min-w-64">
-          <h3 className="font-semibold mb-4">Ships</h3>
+        <div className="bg-gray-800/50 rounded-xl p-5 backdrop-blur min-w-64">
+          <h3 className="font-semibold mb-4 text-blue-400 uppercase tracking-wider text-sm">Fleet Status</h3>
 
           <div className="space-y-2 mb-6">
             {SHIP_NAMES.map((name) => {
@@ -227,28 +243,28 @@ export function ShipPlacement() {
           <div className="space-y-2">
             <button
               onClick={handleRandomize}
-              className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded transition-colors"
+              className="w-full py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors font-medium"
             >
-              Random Placement
+              🎲 Randomize
             </button>
 
             <button
               onClick={handleClear}
-              className="w-full py-2 bg-gray-600 hover:bg-gray-500 rounded transition-colors"
+              className="w-full py-2 bg-gray-600 hover:bg-gray-500 rounded-lg transition-colors font-medium"
             >
-              Clear All
+              ↺ Clear All
             </button>
 
             <button
               onClick={handleConfirm}
               disabled={!allPlaced}
-              className={`w-full py-3 rounded font-semibold transition-colors ${
+              className={`w-full py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
                 allPlaced
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-gray-600 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 shadow-lg shadow-green-900/50'
+                  : 'bg-gray-600 cursor-not-allowed text-gray-400'
               }`}
             >
-              {allPlaced ? 'Confirm Placement' : 'Place All Ships'}
+              {allPlaced ? '✓ Deploy Fleet' : 'Place All Ships'}
             </button>
           </div>
         </div>

@@ -48,7 +48,7 @@ export interface PlayedTurn {
 
 export type CellState = 'empty' | 'ship' | 'hit' | 'miss' | 'sunk' | 'pending';
 
-export type PlayerSlot = 'player1' | 'player2';
+export type PlayerSlot = 'host' | 'guest';
 
 export interface GameState {
   gameId: string | null;

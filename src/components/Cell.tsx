@@ -1,4 +1,5 @@
 import type { CellState } from '../lib/types';
+import { ExplosionIcon, SplashIcon, RadarIcon, ShipCell, WaterCell, CrosshairIcon } from './Icons';
 
 interface CellProps {
   state: CellState;
@@ -11,6 +12,8 @@ interface CellProps {
   showCoords?: boolean;
   x?: number;
   y?: number;
+  isOpponentBoard?: boolean;
+  isSelected?: boolean;
 }
 
 export function Cell({
@@ -24,27 +27,138 @@ export function Cell({
   showCoords = false,
   x,
   y,
+  isOpponentBoard = false,
+  isSelected = false,
 }: CellProps) {
-  const getBackgroundColor = () => {
-    if (isInvalid) return 'bg-red-500/50';
-    if (isPreview) return 'bg-blue-400/50';
-    if (state === 'hit') return 'bg-red-600';
-    if (state === 'miss') return 'bg-gray-500';
-    if (state === 'sunk') return 'bg-red-800';
-    if (state === 'pending') return 'bg-yellow-600 animate-pulse';
-    if (isShip) return 'bg-blue-600';
-    return 'bg-gray-700';
-  };
-
   const getCursor = () => {
     if (disabled) return 'cursor-default';
-    if (onClick) return 'cursor-pointer';
+    if (onClick) return 'cursor-crosshair';
     return 'cursor-default';
   };
 
   const getHoverEffect = () => {
     if (disabled || !onClick) return '';
-    return 'hover:brightness-125';
+    return 'hover:brightness-125 hover:scale-105';
+  };
+
+  const getBorderStyle = () => {
+    if (isSelected) return 'ring-2 ring-red-500 ring-offset-1 ring-offset-gray-900';
+    if (isInvalid) return 'ring-2 ring-red-500';
+    if (isPreview) return 'ring-2 ring-blue-400';
+    return '';
+  };
+
+  // Get tooltip text based on cell state
+  const getTooltip = () => {
+    const coord = x !== undefined && y !== undefined
+      ? `${String.fromCharCode(65 + x)}${y + 1}`
+      : '';
+
+    if (state === 'hit') {
+      return isOpponentBoard
+        ? `${coord} - Hit! Your shot hit an enemy ship`
+        : `${coord} - Hit! Enemy hit your ship`;
+    }
+    if (state === 'miss') {
+      return isOpponentBoard
+        ? `${coord} - Miss. No ship at this location`
+        : `${coord} - Miss. Enemy shot missed`;
+    }
+    if (state === 'sunk') {
+      return `${coord} - Sunk! Ship destroyed`;
+    }
+    if (state === 'pending') {
+      return `${coord} - Pending... Waiting for result`;
+    }
+    if (isShip) {
+      return `${coord} - Your ship`;
+    }
+    if (isPreview) {
+      return isInvalid ? `${coord} - Invalid placement` : `${coord} - Ship preview`;
+    }
+    return coord ? `${coord} - Water` : undefined;
+  };
+
+  // Render the cell content based on state
+  const renderContent = () => {
+    // Invalid preview
+    if (isInvalid && isPreview) {
+      return (
+        <div className="w-full h-full bg-red-500/50 flex items-center justify-center">
+          <span className="text-white text-lg font-bold">×</span>
+        </div>
+      );
+    }
+
+    // Valid preview
+    if (isPreview) {
+      return (
+        <div className="w-full h-full bg-blue-400/50 flex items-center justify-center">
+          <ShipCell size={28} className="opacity-70" />
+        </div>
+      );
+    }
+
+    // Hit state - explosion
+    if (state === 'hit') {
+      return (
+        <div className="w-full h-full bg-gradient-to-br from-red-600 to-red-800 flex items-center justify-center relative overflow-hidden">
+          <div className="absolute inset-0 bg-red-500/30 animate-pulse" />
+          <ExplosionIcon size={28} className="relative z-10" />
+        </div>
+      );
+    }
+
+    // Miss state - splash
+    if (state === 'miss') {
+      return (
+        <div className="w-full h-full bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center">
+          <SplashIcon size={24} />
+        </div>
+      );
+    }
+
+    // Sunk state - darker explosion
+    if (state === 'sunk') {
+      return (
+        <div className="w-full h-full bg-gradient-to-br from-red-800 to-red-950 flex items-center justify-center">
+          <ExplosionIcon size={28} className="opacity-80" />
+        </div>
+      );
+    }
+
+    // Pending state - radar animation
+    if (state === 'pending') {
+      return (
+        <div className="w-full h-full bg-gradient-to-br from-yellow-600/80 to-amber-700/80 flex items-center justify-center">
+          <div className="animate-spin-slow">
+            <RadarIcon size={28} />
+          </div>
+        </div>
+      );
+    }
+
+    // Ship cell (on my board)
+    if (isShip) {
+      return (
+        <div className="w-full h-full flex items-center justify-center">
+          <ShipCell size={30} />
+        </div>
+      );
+    }
+
+    // Empty cell - water with grid
+    return (
+      <div className="w-full h-full bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center relative group">
+        <WaterCell size={32} className="absolute inset-0 opacity-50" />
+        {/* Show crosshair on hover for opponent board */}
+        {isOpponentBoard && !disabled && (
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <CrosshairIcon size={24} />
+          </div>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -56,19 +170,16 @@ export function Cell({
       className={`
         w-8 h-8 md:w-10 md:h-10
         rounded-sm
-        border border-gray-600
+        border border-gray-600/50
         transition-all duration-150
-        flex items-center justify-center
-        text-xs font-mono
-        ${getBackgroundColor()}
+        overflow-hidden
         ${getCursor()}
         ${getHoverEffect()}
+        ${getBorderStyle()}
       `}
-      title={showCoords && x !== undefined && y !== undefined ? `(${x}, ${y})` : undefined}
+      title={getTooltip()}
     >
-      {state === 'hit' && <span className="text-white">X</span>}
-      {state === 'miss' && <span className="text-gray-300">•</span>}
-      {state === 'pending' && <span className="text-white">?</span>}
+      {renderContent()}
     </button>
   );
 }

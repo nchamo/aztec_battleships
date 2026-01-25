@@ -11,6 +11,10 @@ import { BaseWallet } from '@aztec/wallet-sdk/base-wallet';
 import type { PlayerSlot } from '../lib/types';
 import { getPXE } from './pxe';
 
+// Constants for seed-based wallet
+export const WALLET_SEED_STORAGE_KEY = 'battleships-wallet-seed';
+export const DEFAULT_WALLET_SEED = 'battleships-default-player';
+
 // Minimal wallet implementation for browser
 class MinimalWallet extends BaseWallet {
   private readonly addressToAccount = new Map<string, AccountWithSecretKey>();
@@ -59,8 +63,8 @@ class MinimalWallet extends BaseWallet {
   }
 }
 
-// Storage keys for credentials per player slot
-const getStorageKey = (slot: PlayerSlot) => `battleships-account-${slot}`;
+// Storage key for credentials based on seed and role
+const getStorageKey = (seed: string, role: PlayerSlot) => `battleships-account-${seed}-${role}`;
 
 interface StoredCredentials {
   secretKey: string;
@@ -68,14 +72,14 @@ interface StoredCredentials {
   signingKey: string;
 }
 
-// Generate deterministic credentials from player slot
-async function generateCredentials(slot: PlayerSlot): Promise<{
+// Generate deterministic credentials from seed and role (host/guest)
+async function generateCredentialsFromSeed(seed: string, role: PlayerSlot): Promise<{
   secretKey: Fr;
   salt: Fr;
   signingKey: Buffer;
 }> {
   // Check localStorage first
-  const storageKey = getStorageKey(slot);
+  const storageKey = getStorageKey(seed, role);
   const stored = localStorage.getItem(storageKey);
 
   if (stored) {
@@ -87,12 +91,17 @@ async function generateCredentials(slot: PlayerSlot): Promise<{
     };
   }
 
-  // Generate new credentials based on slot
+  // Derive the seed string based on role
+  // For host: use seed directly
+  // For guest: append "-guest" to differentiate
+  const derivedSeed = role === 'host' ? seed : `${seed}-guest`;
+
+  // Generate new credentials based on derived seed
   const secretKey = await poseidon2Hash([
-    Fr.fromBufferReduce(Buffer.from(slot.padEnd(32, '#'), 'utf8')),
+    Fr.fromBufferReduce(Buffer.from(derivedSeed.padEnd(32, '#'), 'utf8')),
   ]);
 
-  const salt = Fr.fromString(slot === 'player1' ? '1' : '2');
+  const salt = Fr.fromString(role === 'host' ? '1' : '2');
   const signingKey = Buffer.from(secretKey.toBuffer().subarray(0, 32));
 
   // Store credentials
@@ -110,19 +119,27 @@ export interface WalletInstance {
   wallet: MinimalWallet;
   account: AccountWithSecretKey;
   address: AztecAddress;
+  seed: string;
+  role: PlayerSlot;
 }
 
 export type WalletLoadingStatus = 'loading_wallet' | 'deploying_account';
 
+/**
+ * Create or load a wallet from a seed and role.
+ * The seed is used to derive deterministic credentials.
+ * The role (host/guest) determines which derivation path is used.
+ */
 export async function createOrLoadWallet(
-  slot: PlayerSlot,
+  seed: string,
+  role: PlayerSlot,
   onStatusChange?: (status: WalletLoadingStatus) => void
 ): Promise<WalletInstance> {
-  console.log(`[Wallet] Creating/loading wallet for ${slot}...`);
+  console.log(`[Wallet] Creating/loading wallet for seed="${seed}" role=${role}...`);
   onStatusChange?.('loading_wallet');
 
   const { pxe, aztecNode, getSponsoredFeePaymentMethod } = await getPXE();
-  const { secretKey, salt, signingKey } = await generateCredentials(slot);
+  const { secretKey, salt, signingKey } = await generateCredentialsFromSeed(seed, role);
 
   const wallet = new MinimalWallet(pxe, aztecNode);
   const accountContract = new EcdsaRAccountContract(signingKey);
@@ -171,5 +188,5 @@ export async function createOrLoadWallet(
     console.log('[Wallet] Account already deployed');
   }
 
-  return { wallet, account, address };
+  return { wallet, account, address, seed, role };
 }
