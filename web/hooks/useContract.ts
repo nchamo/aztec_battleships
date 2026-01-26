@@ -7,7 +7,7 @@ import { useGameStore } from '../store/game';
 import { getPXE } from '../services/pxe';
 import { loadDeploymentConfig } from '../config';
 import type { ShipPlacement, Shot, CellState } from '../lib/types';
-import { STATUS_CREATED, STATUS_ACTIVE, STATUS_WON_BY_HOST, STATUS_WON_BY_GUEST, BOARD_SIZE } from '../lib/types';
+import { STATUS_CREATED, STATUS_ACTIVE, STATUS_WON_BY_HOST, STATUS_WON_BY_GUEST, BOARD_SIZE, parseGameId, isTurnForPlayer } from '../lib/types';
 
 // Import the generated contract artifact
 // @ts-ignore - artifact generated at build time
@@ -101,10 +101,7 @@ export function useContract() {
         const { getSponsoredFeePaymentMethod } = await getPXE();
         const paymentMethod = await getSponsoredFeePaymentMethod();
 
-        // Convert gameId to Field - handle both numeric strings and hex strings
-        const gameIdField = gameId.startsWith('0x')
-          ? Fr.fromString(gameId)
-          : new Fr(BigInt(gameId));
+        const gameIdField = parseGameId(gameId);
 
         console.log('[Contract] Creating game:', gameId);
 
@@ -146,9 +143,7 @@ export function useContract() {
 
       try {
         const contract = await getContract();
-        const gameIdField = gameId.startsWith('0x')
-          ? Fr.fromString(gameId)
-          : new Fr(BigInt(gameId));
+        const gameIdField = parseGameId(gameId);
 
         const host = await contract.methods
           .get_game_host({ id: gameIdField })
@@ -171,9 +166,7 @@ export function useContract() {
       }
       try {
         const contract = await getContract();
-        const gameIdField = gameId.startsWith('0x')
-          ? Fr.fromString(gameId)
-          : new Fr(BigInt(gameId));
+        const gameIdField = parseGameId(gameId);
         const guest = await contract.methods
           .get_game_guest({ id: gameIdField })
           .simulate({ from: walletInstance.address });
@@ -204,10 +197,7 @@ export function useContract() {
         const { pxe, getSponsoredFeePaymentMethod } = await getPXE();
         const paymentMethod = await getSponsoredFeePaymentMethod();
 
-        // Convert gameId to Field - handle both numeric strings and hex strings
-        const gameIdField = gameId.startsWith('0x')
-          ? Fr.fromString(gameId)
-          : new Fr(BigInt(gameId));
+        const gameIdField = parseGameId(gameId);
 
         // Get the host address and register them as a sender
         console.log('[Contract] Getting game host for:', gameId);
@@ -270,9 +260,7 @@ export function useContract() {
         const { getSponsoredFeePaymentMethod } = await getPXE();
         const paymentMethod = await getSponsoredFeePaymentMethod();
 
-        const gameIdField = gameId.startsWith('0x')
-          ? Fr.fromString(gameId)
-          : new Fr(BigInt(gameId));
+        const gameIdField = parseGameId(gameId);
 
         console.log('[Contract] Shooting at:', shot, 'turn:', turn, 'My address is', walletInstance.address.toString());
 
@@ -313,9 +301,7 @@ export function useContract() {
 
       try {
         const contract = await getContract();
-        const gameIdField = gameId.startsWith('0x')
-          ? Fr.fromString(gameId)
-          : new Fr(BigInt(gameId));
+        const gameIdField = parseGameId(gameId);
 
         const status = await contract.methods
           .get_game_status({ id: gameIdField })
@@ -340,9 +326,7 @@ export function useContract() {
 
       try {
         const contract = await getContract();
-        const gameIdField = gameId.startsWith('0x')
-          ? Fr.fromString(gameId)
-          : new Fr(BigInt(gameId));
+        const gameIdField = parseGameId(gameId);
 
         const played = await contract.methods
           .was_turn_played({ id: gameIdField }, turn)
@@ -367,9 +351,7 @@ export function useContract() {
 
       try {
         const contract = await getContract();
-        const gameIdField = gameId.startsWith('0x')
-          ? Fr.fromString(gameId)
-          : new Fr(BigInt(gameId));
+        const gameIdField = parseGameId(gameId);
 
         const turnData = await contract.methods
           .get_turn({ id: gameIdField }, turn)
@@ -407,9 +389,7 @@ export function useContract() {
         const { getSponsoredFeePaymentMethod } = await getPXE();
         const paymentMethod = await getSponsoredFeePaymentMethod();
 
-        const gameIdField = gameId.startsWith('0x')
-          ? Fr.fromString(gameId)
-          : new Fr(BigInt(gameId));
+        const gameIdField = parseGameId(gameId);
 
         console.log('[Contract] Claiming abandonment');
 
@@ -447,9 +427,7 @@ export function useContract() {
         const contract = await getContract();
         const { pxe } = await getPXE();
 
-        const gameIdField = gameId.startsWith('0x')
-          ? Fr.fromString(gameId)
-          : new Fr(BigInt(gameId));
+        const gameIdField = parseGameId(gameId);
 
         console.log('[Contract] Reconnecting to game:', gameId);
 
@@ -538,10 +516,6 @@ export function useContract() {
         let myHits = 0;
         let opponentHits = 0;
 
-        // Determine which turns are mine vs opponent's
-        // Host plays even turns (2, 4, 6...), Guest plays odd turns (1, 3, 5...)
-        const myTurnsAreEven = isHost;
-
         for (let turn = 1; turn <= latestTurn; turn++) {
           try {
             const turnData = await contract.methods
@@ -555,7 +529,7 @@ export function useContract() {
               y: Number(turnData.shot.y),
             };
             const opponentShotHit = Boolean(turnData.opponent_shot_hit);
-            const isMyTurnFlag = (turn % 2 === 0) === myTurnsAreEven;
+            const isMyTurnFlag = isTurnForPlayer(turn, isHost);
 
             console.log(`[Contract] Turn ${turn}: shot=(${shot.x}, ${shot.y}), opponent_shot_hit=${opponentShotHit}, isMyTurn=${isMyTurnFlag}`);
 
@@ -603,7 +577,7 @@ export function useContract() {
 
         // 7. Determine current turn and if it's my turn
         const nextTurn = latestTurn + 1;
-        const isMyTurnNext = (nextTurn % 2 === 0) === myTurnsAreEven;
+        const isMyTurnNext = isTurnForPlayer(nextTurn, isHost);
 
         console.log('[Contract] Next turn:', nextTurn, 'Is my turn:', isMyTurnNext);
         console.log('[Contract] My shots:', myShots.length, 'Opponent shots:', opponentShots.length);

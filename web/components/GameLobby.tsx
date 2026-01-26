@@ -4,7 +4,7 @@ import { useWalletStore } from '../store/wallet';
 import { useGameStore } from '../store/game';
 import { Grid } from './Grid';
 import type { Shot } from '../lib/types';
-import { BOARD_SIZE } from '../lib/types';
+import { BOARD_SIZE, coordToString } from '../lib/types';
 
 export function GameLobby() {
   const playerSlot = useWalletStore((state) => state.playerSlot);
@@ -76,7 +76,7 @@ export function GameLobby() {
 
         {initialShot && (
           <p className="text-sm text-gray-400 mb-4">
-            Selected: {String.fromCharCode(65 + initialShot.x)}{initialShot.y + 1}
+            Selected: {coordToString(initialShot.x, initialShot.y)}
           </p>
         )}
 

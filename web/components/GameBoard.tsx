@@ -10,6 +10,7 @@ import {
   TOTAL_SHIP_CELLS,
   STATUS_WON_BY_HOST,
   STATUS_WON_BY_GUEST,
+  coordToString,
 } from '../lib/types';
 
 export function GameBoard() {
@@ -38,15 +39,15 @@ export function GameBoard() {
 
   const { shoot, wasTurnPlayed, getTurn, getGameStatus, isLoading, error } = useContract();
   const [selectedShot, setSelectedShot] = useState<Shot | null>(null);
-  const [isPolling, setIsPolling] = useState(false);
+  const isPollingRef = useRef<boolean>(false);
   const lastProcessedTurn = useRef<number>(0);
 
   // Poll for opponent's turn when it's not my turn
   useEffect(() => {
-    if (!gameId || isMyTurn || phase !== 'playing' || isPolling) return;
+    if (!gameId || isMyTurn || phase !== 'playing' || isPollingRef.current) return;
 
     const pollOpponentTurn = async () => {
-      setIsPolling(true);
+      isPollingRef.current = true;
       try {
         // The opponent's turn number we're waiting for
         // If I'm host (even turns), opponent plays odd turns
@@ -111,7 +112,7 @@ export function GameBoard() {
       } catch (err) {
         console.error('[GameBoard] Error polling opponent turn:', err);
       } finally {
-        setIsPolling(false);
+        isPollingRef.current = false;
       }
     };
 
@@ -120,7 +121,7 @@ export function GameBoard() {
     const interval = setInterval(pollOpponentTurn, 3000);
 
     return () => clearInterval(interval);
-  }, [gameId, isMyTurn, phase, currentTurn, isHost, wasTurnPlayed, getTurn, getGameStatus, recordOpponentShot, verifyPendingShot, setCurrentTurn, setIsMyTurn, setContractStatus, setPhase, isPolling]);
+  }, [gameId, isMyTurn, phase, currentTurn, isHost, wasTurnPlayed, getTurn, getGameStatus, recordOpponentShot, verifyPendingShot, setCurrentTurn, setIsMyTurn, setContractStatus, setPhase]);
 
   // Check win conditions
   const isGameOver = phase === 'finished';
@@ -267,7 +268,7 @@ export function GameBoard() {
           <>
             {selectedShot && (
               <p className="text-sm text-gray-300 font-mono">
-                Target: <span className="text-red-400 font-bold">{String.fromCharCode(65 + selectedShot.x)}{selectedShot.y + 1}</span>
+                Target: <span className="text-red-400 font-bold">{coordToString(selectedShot.x, selectedShot.y)}</span>
               </p>
             )}
 

@@ -1,5 +1,7 @@
 // Game types matching the contract definitions
 
+import { Fr } from '@aztec/aztec.js/fields';
+
 export const BOARD_SIZE = 10;
 export const TOTAL_SHIP_CELLS = 17;
 export const SHIP_SIZES = [5, 4, 3, 3, 2] as const; // carrier, battleship, cruiser, submarine, destroyer
@@ -46,7 +48,7 @@ export interface PlayedTurn {
   opponent_shot_hit: boolean; // Whether the opponent's previous shot was a hit
 }
 
-export type CellState = 'empty' | 'ship' | 'hit' | 'miss' | 'sunk' | 'pending';
+export type CellState = 'empty' | 'ship' | 'hit' | 'miss' | 'pending';
 
 export type PlayerSlot = 'host' | 'guest';
 
@@ -73,3 +75,26 @@ export const SHIP_LENGTHS: Record<ShipName, number> = {
   submarine: 3,
   destroyer: 2,
 };
+
+/**
+ * Determine if a given turn belongs to a player based on host/guest role.
+ * Host plays even turns (2, 4, 6...), Guest plays odd turns (1, 3, 5...)
+ */
+export function isTurnForPlayer(turn: number, isHost: boolean): boolean {
+  return isHost === (turn % 2 === 0);
+}
+
+/**
+ * Parse a game ID string into a Fr (Field) type.
+ * Handles both hex strings (0x...) and numeric strings.
+ */
+export function parseGameId(gameId: string): Fr {
+  return gameId.startsWith('0x') ? Fr.fromString(gameId) : new Fr(BigInt(gameId));
+}
+
+/**
+ * Convert board coordinates to human-readable string (e.g., "A1", "B5").
+ */
+export function coordToString(x: number, y: number): string {
+  return `${String.fromCharCode(65 + x)}${y + 1}`;
+}

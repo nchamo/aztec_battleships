@@ -40,9 +40,6 @@ interface GameState {
   myHits: number;
   opponentHits: number;
 
-  // Pending shot (for opponent to process)
-  pendingShot: Shot | null;
-
   // Last shot we made that needs verification
   lastUnverifiedShot: Shot | null;
 
@@ -59,7 +56,6 @@ interface GameState {
   setCurrentTurn: (turn: number) => void;
   setIsMyTurn: (isMyTurn: boolean) => void;
   setContractStatus: (status: GameStatus) => void;
-  setPendingShot: (shot: Shot | null) => void;
   // For reconnection - set multiple pieces of state at once
   setReconnectionState: (state: {
     gameId: string;
@@ -94,7 +90,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   contractStatus: STATUS_CREATED,
   myHits: 0,
   opponentHits: 0,
-  pendingShot: null,
   lastUnverifiedShot: null,
 
   // Actions
@@ -170,8 +165,6 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setContractStatus: (status) => set({ contractStatus: status }),
 
-  setPendingShot: (shot) => set({ pendingShot: shot }),
-
   // Set multiple pieces of state at once for reconnection
   setReconnectionState: (state) =>
     set({
@@ -187,7 +180,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       phase: 'playing',
       contractStatus: 2, // STATUS_ACTIVE
       lastUnverifiedShot: state.lastUnverifiedShot,
-      pendingShot: null,
     }),
 
   resetGame: () =>
@@ -205,7 +197,6 @@ export const useGameStore = create<GameState>((set, get) => ({
       contractStatus: STATUS_CREATED,
       myHits: 0,
       opponentHits: 0,
-      pendingShot: null,
       lastUnverifiedShot: null,
     }),
 }));

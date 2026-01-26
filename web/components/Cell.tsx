@@ -1,4 +1,5 @@
 import type { CellState } from '../lib/types';
+import { coordToString } from '../lib/types';
 import { ExplosionIcon, SplashIcon, RadarIcon, ShipCell, WaterCell, CrosshairIcon } from './Icons';
 
 interface CellProps {
@@ -51,7 +52,7 @@ export function Cell({
   // Get tooltip text based on cell state
   const getTooltip = () => {
     const coord = x !== undefined && y !== undefined
-      ? `${String.fromCharCode(65 + x)}${y + 1}`
+      ? coordToString(x, y)
       : '';
 
     if (state === 'hit') {
@@ -63,9 +64,6 @@ export function Cell({
       return isOpponentBoard
         ? `${coord} - Miss. No ship at this location`
         : `${coord} - Miss. Enemy shot missed`;
-    }
-    if (state === 'sunk') {
-      return `${coord} - Sunk! Ship destroyed`;
     }
     if (state === 'pending') {
       return `${coord} - Pending... Waiting for result`;
@@ -114,15 +112,6 @@ export function Cell({
       return (
         <div className="w-full h-full bg-gradient-to-br from-slate-600 to-slate-800 flex items-center justify-center">
           <SplashIcon size={24} />
-        </div>
-      );
-    }
-
-    // Sunk state - darker explosion
-    if (state === 'sunk') {
-      return (
-        <div className="w-full h-full bg-gradient-to-br from-red-800 to-red-950 flex items-center justify-center">
-          <ExplosionIcon size={28} className="opacity-80" />
         </div>
       );
     }
