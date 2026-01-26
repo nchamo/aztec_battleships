@@ -1,0 +1,37 @@
+{
+  "name": "battleships-contracts",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "compile": "aztec compile",
+    "test:nr": "aztec test",
+    "codegen": "tsx scripts/codegen.ts",
+    "deploy": "tsx scripts/deploy.ts --network sandbox",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf target"
+  },
+  "dependencies": {
+    "@aztec/accounts": "4.0.0-nightly.20260122",
+    "@aztec/aztec.js": "4.0.0-nightly.20260122",
+    "@aztec/constants": "4.0.0-nightly.20260122",
+    "@aztec/foundation": "4.0.0-nightly.20260122",
+    "@aztec/kv-store": "4.0.0-nightly.20260122",
+    "@aztec/pxe": "4.0.0-nightly.20260122",
+    "@aztec/stdlib": "4.0.0-nightly.20260122",
+    "@aztec/wallet-sdk": "4.0.0-nightly.20260122"
+  },
+  "devDependencies": {
+    "@aztec/noir-contracts.js": "4.0.0-nightly.20260122",
+    "@aztec/test-wallet": "4.0.0-nightly.20260122",
+    "@types/node": "^20.17.18",
+    "dotenv": "^16.4.7",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^4.0.15"
+  }
+}

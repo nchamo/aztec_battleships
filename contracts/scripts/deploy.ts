@@ -27,7 +27,7 @@ import { createPXE } from '@aztec/pxe/server';
 import { BaseWallet } from '@aztec/wallet-sdk/base-wallet';
 import fs from 'fs';
 import path from 'path';
-import { BattleshipsContractArtifact } from '../src/artifacts/Battleships.js';
+import { BattleshipsContractArtifact } from '../../web/artifacts/Battleships.js';
 
 class MinimalWallet extends BaseWallet {
   private readonly addressToAccount = new Map<string, AccountWithSecretKey>();
@@ -295,7 +295,7 @@ async function writeDeploymentConfig(
   network: string,
   deploymentInfo: DeploymentInfo
 ) {
-  const configDir = path.join(import.meta.dirname, `../src/config/deployments`);
+  const configDir = path.join(import.meta.dirname, `../../web/config/deployments`);
   const configFilePath = path.join(configDir, `${network}.json`);
 
   // Ensure directory exists
@@ -319,7 +319,7 @@ async function writeDeploymentConfig(
 
   console.log('\nDeployment successful');
   console.log(`- Network:     ${network}`);
-  console.log(`- Config:      src/config/deployments/${network}.json`);
+  console.log(`- Config:      web/config/deployments/${network}.json`);
   console.log(`- Battleships: ${deploymentInfo.battleshipsContract.address}`);
   console.log(`- Deployer:    ${deploymentInfo.deployer}\n`);
 }

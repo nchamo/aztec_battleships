@@ -4,107 +4,185 @@ A fully-private implementation of Battleships using Aztec.nr and Noir.
 
 ## Features
 
-✅ **Complete Game Logic**
+**Complete Game Logic**
 - Ship placement validation (5 ships: carrier, battleship, cruiser, submarine, destroyer)
 - Hit detection
 - Victory conditions (sink all 17 enemy ship cells)
 - Abandonment timeout mechanism
 
-✅ **Privacy-First Design**
+**Privacy-First Design**
 - Ship positions stay private (encrypted)
 - Shot coordinates private (only players know)
 - Results private (hit/miss known only to players)
 - Zero-knowledge proofs ensure honesty without revealing secrets
 
-✅ **Fair & Trustless**
+**Fair & Trustless**
 - No central authority needed
 - Cryptographic validation prevents cheating
 - Time-based abandonment protection
 - Multi-game support (unlimited concurrent games)
 
-## Game Flow
-
-1. **Create Game**: Player A creates game with ID (e.g., `createGame(1)`)
-2. **Join Game**: Player B joins using same ID (`joinGame(1)`)
-3. **Place Ships**: Both players place their 5 ships privately
-4. **Battle**:
-   - Take turns shooting at coordinates
-   - Opponent verifies hit/miss privately
-   - Results sent back via encrypted notes
-5. **Victory**: First to sink all 17 opponent cells wins
-6. **Abandonment**: Claim victory if opponent inactive >24 hours
-
 ## Project Structure
 
 ```
 battleships/
-├── src/
-│   ├── main.nr          # Main contract with game functions
-│   ├── types.nr         # Data structures and constants
-│   ├── utils.nr         # Ship validation and hit detection
-│   └── test/            # Test suite
-│       ├── helpers.nr   # Test helper functions
-│       ├── types_test.nr        # Unit tests for types
-│       ├── utils_test.nr        # Unit tests for utils
-│       └── integration/ # Integration tests
-│           ├── success/         # Successful game scenarios (5 tests)
-│           └── failures/        # Error & validation tests (13 tests)
-├── Nargo.toml           # Noir project configuration
-├── README.md            # This file
+├── contracts/                # Smart contracts (Noir)
+│   ├── package.json
+│   ├── Nargo.toml
+│   ├── vitest.config.ts
+│   ├── tsconfig.json
+│   ├── src/                  # Noir source
+│   │   ├── main.nr
+│   │   ├── types.nr
+│   │   └── utils.nr
+│   ├── e2e-test/             # E2E tests (TypeScript)
+│   └── scripts/              # Build and deploy scripts
+├── web/                      # Frontend (React + Vite)
+│   ├── package.json
+│   ├── vite.config.ts
+│   ├── tsconfig.json
+│   ├── index.html
+│   ├── main.tsx
+│   ├── App.tsx
+│   ├── components/
+│   ├── hooks/
+│   ├── store/
+│   ├── services/
+│   ├── config/
+│   └── artifacts/            # Generated TypeScript wrappers
+├── package.json              # Workspace root
+├── README.md
+└── LICENSE
 ```
+
+## Prerequisites
+
+- Node.js >= 22.0.0
+- Yarn
+- Aztec development environment
 
 ## Installation
 
-### Prerequisites
-- Aztec development environment
-
-### Setup
-1. Install Aztec CLI (if not already installed):
+1. Install Aztec CLI:
 ```bash
 bash -i <(curl -s https://install.aztec.network)
 ```
 
-2. Run `aztec-up` to install/update Aztec binaries:
+2. Install/update Aztec binaries:
 ```bash
 # Currently we use 4.0.0-nightly.20260122 version, make sure you have the right one
 aztec-up 4.0.0-nightly.20260122
 ```
 
-3. Clone this repository:
+3. Clone and install dependencies:
 ```bash
 git clone <repository-url>
 cd battleships
+yarn install
 ```
 
-## Building & Testing
+## Contract Development
 
-### Compile the Contract
+All contract commands are run from the `contracts/` directory.
+
+### Compile Contract
 ```bash
-aztec compile
+yarn compile
 ```
 
-This generates the contract ABI and bytecode in the `target/` directory.
-
-### Run All Tests
+### Run Noir Tests
 ```bash
-aztec test
+yarn test:nr
 ```
 
-### Run Specific Test
+### Run E2E Tests
 ```bash
-aztec test test_name
+# You'll need to run a sandbox first, more on that below
+yarn test
 ```
+
+### Generate TypeScript Artifacts
+```bash
+yarn codegen
+```
+This compiles the contract and generates TypeScript wrappers in `web/artifacts/`.
+
+### Deploy to Sandbox
+```bash
+yarn deploy
+```
+Saves deployment info to `web/config/deployments/sandbox.json`.
+
+
+## Web Development
+
+All web commands are run from the `web/` directory.
+
+### Start Dev Server
+```bash
+yarn dev
+```
+App runs at http://localhost:3000
+
+### Build for Production
+```bash
+cd web
+yarn build
+```
+
+### Preview Production Build
+```bash
+cd web
+yarn serve
+```
+
+## Quick Start (Full Workflow)
+
+```bash
+# Terminal 1: Start Aztec sandbox
+aztec start --local-network
+
+# Terminal 2: Build and run
+cd contracts
+yarn codegen          # Compile contracts + generate TS artifacts
+yarn deploy           # Deploy to sandbox
+
+cd ../web
+yarn dev              # Start dev server
+```
+
+## Root Workspace Commands
+
+From the project root:
+
+| Command | Description |
+|---------|-------------|
+| `yarn dev` | Start web dev server |
+| `yarn build` | Generate artifacts + build web app |
+| `yarn test` | Run contract E2E tests |
+| `yarn clean` | Clean all build artifacts |
+
+## Game Flow
+
+1. **Create Game**: Player A creates game with a unique ID
+2. **Join Game**: Player B joins using the same ID
+3. **Place Ships**: Both players place their 5 ships privately
+4. **Battle**: Take turns shooting, opponent verifies hit/miss privately
+5. **Victory**: First to sink all 17 opponent cells wins
+6. **Abandonment**: Claim victory if opponent inactive >24 hours
+
 ## Ship Configuration
 
-Standard battleships:
-- Carrier: 5 cells
-- Battleship: 4 cells
-- Cruiser: 3 cells
-- Submarine: 3 cells
-- Destroyer: 2 cells
-- **Total: 17 cells** (victory condition)
+| Ship | Size |
+|------|------|
+| Carrier | 5 cells |
+| Battleship | 4 cells |
+| Cruiser | 3 cells |
+| Submarine | 3 cells |
+| Destroyer | 2 cells |
+| **Total** | **17 cells** |
 
-Board: 10×10 grid (coordinates 0-9)
+Board: 10x10 grid (coordinates 0-9)
 
 ## License
 

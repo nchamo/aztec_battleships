@@ -127,6 +127,7 @@ export default defineConfig({
     },
   },
   build: {
+    outDir: 'dist',
     sourcemap: false, // Disable sourcemaps to reduce memory usage
     minify: 'esbuild',
     chunkSizeWarningLimit: 2000, // Increase chunk size warning limit

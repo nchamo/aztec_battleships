@@ -26,8 +26,18 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
-node_modules
-dist
 
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+web/dist/
+
+# Generated artifacts
+web/target/
+web/artifacts/
+
+# Misc
 codegenCache.json
-pxe-store
+pxe-store/

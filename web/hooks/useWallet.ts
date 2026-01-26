@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom';
 import { useWalletStore } from '../store/wallet';
 import { useGameStore } from '../store/game';
 import { getPXE } from '../services/pxe';
-import { createOrLoadWallet, WALLET_SEED_STORAGE_KEY, DEFAULT_WALLET_SEED } from '../services/wallet';
+import { createOrLoadWallet, WALLET_SEED_STORAGE_KEY, generateRandomSeed } from '../services/wallet';
 import type { PlayerSlot } from '../lib/types';
 
 export function useWallet() {
@@ -65,8 +65,8 @@ export function useWallet() {
 
   // Connect wallet with a seed - role will be determined by action selection
   const connect = useCallback(async (seedInput: string, role: PlayerSlot) => {
-    // Use provided seed or fall back to default
-    const seedToUse = seedInput.trim() || DEFAULT_WALLET_SEED;
+    // Use provided seed or generate a random readable one
+    const seedToUse = seedInput.trim() || generateRandomSeed();
 
     if (pxeStatus !== 'connected') {
       setConnectionError('PXE not connected');

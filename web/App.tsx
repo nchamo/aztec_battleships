@@ -17,7 +17,8 @@ export default function App() {
   const gameAction = useWalletStore((state) => state.gameAction);
 
   // Not connected, reconnecting, or no action selected - show wallet connect full-screen
-  if (!isConnected || isReconnecting || !gameAction) {
+  // Exception: if phase is 'playing', show the game (for reconnection flow)
+  if (!isConnected || isReconnecting || (!gameAction && phase !== 'playing')) {
     return <WalletConnect />;
   }
 

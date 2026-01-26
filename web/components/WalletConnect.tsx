@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useWallet } from '../hooks/useWallet';
 import { useWalletStore } from '../store/wallet';
+import { useGameStore } from '../store/game';
 import { useContract } from '../hooks/useContract';
-import { DEFAULT_WALLET_SEED } from '../services/wallet';
 
 type GameAction = 'create' | 'join' | 'reconnect';
 
@@ -34,11 +34,13 @@ export function WalletConnect() {
     setGameAction,
   } = useWalletStore();
   const { reconnectToGame } = useContract();
+  const phase = useGameStore((state) => state.phase);
 
   const [reconnectMode, setReconnectMode] = useState(false); // Local state for reconnect UI
   const [gameIdInput, setGameIdInput] = useState('');
   const [seedInput, setSeedInput] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<GameAction | null>(null); // Track which action is in progress
 
   // Load stored seed on mount
   useEffect(() => {
@@ -63,6 +65,7 @@ export function WalletConnect() {
   // Handle action selection (create/join/reconnect) - this triggers wallet connection with appropriate role
   const handleActionSelect = async (action: GameAction) => {
     setLocalError(null);
+    setPendingAction(action);
 
     if (action === 'reconnect') {
       // For reconnect, we'll start with host and try guest if that fails
@@ -71,10 +74,12 @@ export function WalletConnect() {
           await connect(seedInput, 'host');
         } catch (err) {
           setLocalError('Failed to connect wallet');
+          setPendingAction(null);
           return;
         }
       }
       setReconnectMode(true);
+      setPendingAction(null);
     } else {
       // For create/join, determine role and connect
       const role = action === 'create' ? 'host' : 'guest';
@@ -84,11 +89,13 @@ export function WalletConnect() {
           await connect(seedInput, role);
         } catch (err) {
           setLocalError('Failed to connect wallet');
+          setPendingAction(null);
           return;
         }
       }
 
       setGameAction(action);
+      setPendingAction(null);
     }
   };
 
@@ -227,7 +234,7 @@ export function WalletConnect() {
               <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-3 mb-4 text-sm text-blue-300">
                 <div className="flex items-center gap-2">
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-300" />
-                  <span>Checking game {reconnectGameId} as {playerSlot}...</span>
+                  <span>Reconnecting to game {reconnectGameId}...</span>
                 </div>
               </div>
             )}
@@ -323,8 +330,8 @@ export function WalletConnect() {
     );
   }
 
-  // Connected and action selected (create/join) - show header bar for game flow
-  if (isConnected && address && gameAction) {
+  // Connected and action selected (create/join) OR playing a game - show header bar for game flow
+  if (isConnected && address && (gameAction || phase === 'playing')) {
     return (
       <div className="bg-gray-800 rounded-lg p-4 mb-6">
         <div className="flex items-center justify-between">
@@ -367,7 +374,7 @@ export function WalletConnect() {
               onChange={(e) => setSeedInput(e.target.value)}
               placeholder="Leave empty to use default seed"
               className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:border-blue-500 text-sm"
-              disabled={isConnecting}
+              disabled={pendingAction !== null}
             />
             <p className="text-xs text-gray-500 mt-1">
               Same seed = same wallet. Different seeds = different wallets.
@@ -380,32 +387,27 @@ export function WalletConnect() {
             </div>
           )}
 
-          {isConnecting && (
-            <div className="bg-blue-900/30 border border-blue-700 rounded-lg p-3 mb-4 text-sm text-blue-300">
-              <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-300" />
-                <span>{getLoadingMessage()}</span>
-              </div>
-            </div>
-          )}
-
           {/* Action selection buttons */}
           <div className="space-y-3">
             <button
               onClick={() => handleActionSelect('create')}
-              disabled={!isPXEConnected || isConnecting}
+              disabled={!isPXEConnected || pendingAction !== null}
               className={`w-full py-4 rounded-lg font-semibold transition-colors text-left px-4 ${
-                !isPXEConnected || isConnecting
-                  ? 'bg-gray-600 cursor-not-allowed'
+                !isPXEConnected || pendingAction !== null
+                  ? 'bg-gray-600 cursor-not-allowed opacity-75'
                   : 'bg-blue-600 hover:bg-blue-700'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-base">Create Game</div>
-                  <div className="text-xs opacity-70 font-normal">Start a new game and wait for an opponent</div>
+                  <div className="text-base">
+                    {pendingAction === 'create' ? 'Creating Game...' : 'Create Game'}
+                  </div>
+                  <div className="text-xs opacity-70 font-normal">
+                    {pendingAction === 'create' ? getLoadingMessage() : 'Start a new game and wait for an opponent'}
+                  </div>
                 </div>
-                {isConnecting && gameAction === 'create' && (
+                {pendingAction === 'create' && (
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
                 )}
               </div>
@@ -413,19 +415,23 @@ export function WalletConnect() {
 
             <button
               onClick={() => handleActionSelect('join')}
-              disabled={!isPXEConnected || isConnecting}
+              disabled={!isPXEConnected || pendingAction !== null}
               className={`w-full py-4 rounded-lg font-semibold transition-colors text-left px-4 ${
-                !isPXEConnected || isConnecting
-                  ? 'bg-gray-600 cursor-not-allowed'
+                !isPXEConnected || pendingAction !== null
+                  ? 'bg-gray-600 cursor-not-allowed opacity-75'
                   : 'bg-green-600 hover:bg-green-700'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-base">Join Game</div>
-                  <div className="text-xs opacity-70 font-normal">Join an existing game with a game ID</div>
+                  <div className="text-base">
+                    {pendingAction === 'join' ? 'Joining Game...' : 'Join Game'}
+                  </div>
+                  <div className="text-xs opacity-70 font-normal">
+                    {pendingAction === 'join' ? getLoadingMessage() : 'Join an existing game with a game ID'}
+                  </div>
                 </div>
-                {isConnecting && gameAction === 'join' && (
+                {pendingAction === 'join' && (
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
                 )}
               </div>
@@ -433,19 +439,23 @@ export function WalletConnect() {
 
             <button
               onClick={() => handleActionSelect('reconnect')}
-              disabled={!isPXEConnected || isConnecting}
+              disabled={!isPXEConnected || pendingAction !== null}
               className={`w-full py-4 rounded-lg font-semibold transition-colors text-left px-4 ${
-                !isPXEConnected || isConnecting
-                  ? 'bg-gray-600 cursor-not-allowed'
+                !isPXEConnected || pendingAction !== null
+                  ? 'bg-gray-600 cursor-not-allowed opacity-75'
                   : 'bg-yellow-600 hover:bg-yellow-700'
               }`}
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-base">Reconnect to Game</div>
-                  <div className="text-xs opacity-70 font-normal">Reconnect to an active game you were playing</div>
+                  <div className="text-base">
+                    {pendingAction === 'reconnect' ? 'Connecting...' : 'Reconnect to Game'}
+                  </div>
+                  <div className="text-xs opacity-70 font-normal">
+                    {pendingAction === 'reconnect' ? getLoadingMessage() : 'Reconnect to an active game you were playing'}
+                  </div>
                 </div>
-                {isConnecting && reconnectMode && (
+                {pendingAction === 'reconnect' && (
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
                 )}
               </div>
@@ -456,7 +466,7 @@ export function WalletConnect() {
           {isConnected && seed && (
             <div className="mt-4 pt-4 border-t border-gray-700">
               <div className="text-xs text-gray-500">
-                Connected with seed: <span className="font-mono">{seed === DEFAULT_WALLET_SEED ? '(default)' : seed.slice(0, 20) + '...'}</span>
+                Connected with seed: <span className="font-mono">{seed.length > 25 ? seed.slice(0, 22) + '...' : seed}</span>
               </div>
             </div>
           )}

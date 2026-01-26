@@ -1,4 +1,4 @@
-import { BattleshipsContract, BattleshipsContractArtifact } from "../../src/artifacts/Battleships.js";
+import { BattleshipsContract, BattleshipsContractArtifact } from "../../web/artifacts/Battleships.js";
 import { Contract } from "@aztec/aztec.js/contracts";
 import type { Wallet } from "@aztec/aztec.js/wallet";
 

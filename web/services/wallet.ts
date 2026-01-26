@@ -13,7 +13,26 @@ import { getPXE } from './pxe';
 
 // Constants for seed-based wallet
 export const WALLET_SEED_STORAGE_KEY = 'battleships-wallet-seed';
-export const DEFAULT_WALLET_SEED = 'battleships-default-player';
+
+// Word lists for readable random seed generation
+const ADJECTIVES = [
+  'swift', 'brave', 'calm', 'dark', 'eager', 'fair', 'gold', 'happy',
+  'iron', 'keen', 'loud', 'mild', 'noble', 'odd', 'proud', 'quick',
+  'red', 'silent', 'tall', 'vivid', 'warm', 'young', 'zen', 'bold'
+];
+
+const NOUNS = [
+  'admiral', 'beacon', 'captain', 'dolphin', 'eagle', 'falcon', 'gull',
+  'harbor', 'island', 'jetty', 'kraken', 'lagoon', 'mast', 'navy',
+  'ocean', 'pirate', 'quay', 'reef', 'sailor', 'tide', 'vessel', 'wave'
+];
+
+export function generateRandomSeed(): string {
+  const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
+  const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
+  const num = Math.floor(Math.random() * 100);
+  return `${adj}-${noun}-${num}`;
+}
 
 // Minimal wallet implementation for browser
 class MinimalWallet extends BaseWallet {
