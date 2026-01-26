@@ -9,9 +9,10 @@
   "scripts": {
     "compile": "aztec compile",
     "test:nr": "aztec test",
+    "test:ts": "vitest run",
+    "test": "yarn test:nr && yarn test:ts",
     "codegen": "tsx scripts/codegen.ts",
     "deploy": "tsx scripts/deploy.ts --network sandbox",
-    "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf target"
   },

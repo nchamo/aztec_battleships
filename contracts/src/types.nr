@@ -20,8 +20,11 @@ pub global SHIP_SIZES: [u8; 5] = [5, 4, 3, 3, 2]; // carrier, battleship, cruise
 pub global TOTAL_SHIP_CELLS: u8 = 17;
 pub global TURN_TIMEOUT: u64 = 86400; // 24 hours
 
+// Domain separator for turn nullifiers
+pub global DOM_SEP__TURN_NULLIFIER: Field = 1;
+
 // Game statuses
-pub global STATUS_NONE: u8 = 0;  // Game created, waiting for both players to place ships
+pub global STATUS_NONE: u8 = 0;  // Default/uninitialized state (game not yet created)
 pub global STATUS_CREATED: u8 = 1;  // Game created, waiting for both players to place ships
 pub global STATUS_ACTIVE: u8 = 2;   // Both players placed ships, game in progress
 pub global STATUS_WON_BY_HOST: u8 = 3; // Game finished

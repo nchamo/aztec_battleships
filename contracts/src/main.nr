@@ -16,9 +16,10 @@ contract Battleships {
     use crate::types::{
         ShipPlacement, GameId, Shot, BoardNote, Turn, GameStatus,
         PlayedTurnNote, Coordinate,
-        BOARD_SIZE, TOTAL_SHIP_CELLS, TURN_TIMEOUT,
-        STATUS_CREATED, STATUS_ACTIVE, STATUS_WON_BY_HOST, STATUS_WON_BY_GUEST
+        TOTAL_SHIP_CELLS, TURN_TIMEOUT,
+        STATUS_CREATED, STATUS_ACTIVE
     };
+    use crate::utils::{is_hosts_turn, coords_to_index, get_winner_status};
     use uint_note::uint_note::UintNote;
     use aztec::oracle::notes::check_nullifier_exists;
 
@@ -165,8 +166,7 @@ contract Battleships {
 
         let host = self.storage.public_game_hosts.at(game_id).read();
         let guest = self.storage.public_game_guests.at(game_id).read();
-        let is_hosts_turn = turn % 2 == 0;
-        let (turn_player, opponent) = if is_hosts_turn { ( host, guest ) } else { ( guest, host ) };
+        let (turn_player, opponent) = if is_hosts_turn(turn) { ( host, guest ) } else { ( guest, host ) };
         let player = self.msg_sender();
         assert(turn_player == player, "Invalid player");
 
@@ -181,9 +181,8 @@ contract Battleships {
         let (opponent_shot_hit, did_i_lose) = self.internal.verify_opponents_shot(game_id, opponents_turn.shot);
 
         if did_i_lose {
-            let status = if turn % 2 == 0 { STATUS_WON_BY_GUEST } else { STATUS_WON_BY_HOST };
             Battleships::at(self.address)
-                ._on_finished(game_id, status)
+                ._on_finished(game_id, get_winner_status(turn))
                 .enqueue(self.context);
         } else {
             // Pass opponent_shot_hit so opponent learns if their previous shot was successful
@@ -191,7 +190,7 @@ contract Battleships {
 
             // Note: this leaks privacy. Other will know this transaction is for battleship playing
             Battleships::at(self.address)
-                ._on_shoot(game_id)
+                ._validate_game_active(game_id)
                 .enqueue(self.context);
         }
     }
@@ -199,7 +198,7 @@ contract Battleships {
 
     #[external("public")]
     #[only_self]
-    fn _on_shoot(game_id: GameId) {
+    fn _validate_game_active(game_id: GameId) {
         let game_status = self.storage.public_game_status
             .at(game_id)
             .read();
@@ -232,7 +231,7 @@ contract Battleships {
             .at(player)
             .get_note()
             .board;
-        let idx = opponent_shot.y * BOARD_SIZE + opponent_shot.x;
+        let idx = coords_to_index(opponent_shot.x, opponent_shot.y);
         let is_hit = my_board[idx as u32];
 
         let lost = &mut false;
@@ -318,9 +317,8 @@ contract Battleships {
         self.context.push_nullifier(nullifier);
 
         // Call public function to mark abandonment
-        let status = if current_turn % 2 == 0 { STATUS_WON_BY_GUEST } else { STATUS_WON_BY_HOST };
         Battleships::at(self.address)
-            ._on_finished(game_id, status)
+            ._on_finished(game_id, get_winner_status(current_turn))
             .enqueue(self.context);
     }
 
@@ -362,8 +360,7 @@ contract Battleships {
 
         let host = self.storage.public_game_hosts.at(game_id).read();
         let guest = self.storage.public_game_guests.at(game_id).read();
-        let is_hosts_turn = turn % 2 == 0;
-        let turn_player = if is_hosts_turn { host } else { guest };
+        let turn_player = if is_hosts_turn(turn) { host } else { guest };
 
         self.storage.private_turns
             .at(game_id)

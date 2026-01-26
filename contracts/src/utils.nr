@@ -1,15 +1,27 @@
-use crate::types::{GameId, Turn, ShipData, ShipPlacement, Shot, BOARD_SIZE, SHIP_SIZES, TOTAL_CELLS, Coordinate};
+use crate::types::{GameId, Turn, ShipData, ShipPlacement, Shot, GameStatus, BOARD_SIZE, SHIP_SIZES, TOTAL_CELLS, Coordinate, DOM_SEP__TURN_NULLIFIER, STATUS_WON_BY_HOST, STATUS_WON_BY_GUEST};
 use aztec::{
         protocol_types::{traits::ToField, hash::poseidon2_hash_with_separator},
     };
 
 
+pub fn is_hosts_turn(turn: Turn) -> bool {
+    turn % 2 == 0
+}
+
+pub fn get_winner_status(turn: Turn) -> GameStatus {
+    if is_hosts_turn(turn) { STATUS_WON_BY_GUEST } else { STATUS_WON_BY_HOST }
+}
+
+pub fn coords_to_index(x: Coordinate, y: Coordinate) -> u32 {
+    (y * BOARD_SIZE + x) as u32
+}
+
 pub fn build_nullifier(game_id: GameId, turn: Turn) -> Field {
-    // Note: this leaks privacy. We should introduce a shared secret or randomness between players so that third parties 
+    // Note: this leaks privacy. We should introduce a shared secret or randomness between players so that third parties
     //       can't check which turns have been played
     poseidon2_hash_with_separator(
         [game_id.to_field(), turn as Field],
-        1,
+        DOM_SEP__TURN_NULLIFIER,
     )
 }
 
@@ -17,7 +29,7 @@ pub fn build_nullifier(game_id: GameId, turn: Turn) -> Field {
 pub fn expand_ship(ship: ShipData, length: u8) -> [(Coordinate, Coordinate); 5] {
     assert((ship.orientation == 0) | (ship.orientation == 1), "Invalid orientation");
 
-    let mut cells = [(0, 0); 5];
+    let mut cells = [(10, 10); 5];  // 10 is out of bounds, unused slots will fail if accessed
 
     for i in 0..length {
         let cell = if ship.orientation == 0 {
@@ -47,7 +59,7 @@ pub fn validate_shot(shot: Shot) {
 fn mark_cells(board: &mut [bool; TOTAL_CELLS], cells: [(u8, u8); 5], length: u8) -> bool {
     let mut collision = false;
     for i in 0..length {
-        let idx = (cells[i as u32].1 * BOARD_SIZE + cells[i as u32].0) as u32;
+        let idx = coords_to_index(cells[i as u32].0, cells[i as u32].1);
         collision = collision | board[idx];
         board[idx] = true;
     }
@@ -115,12 +127,12 @@ unconstrained fn test_expand_ship_horizontal() {
     let ship = ShipData { x: 2, y: 3, orientation: 0 };
     let cells = expand_ship(ship, 3);
 
-    // Expected: [(2,3), (3,3), (4,3), (0,0), (0,0)]
+    // Expected: [(2,3), (3,3), (4,3), (10,10), (10,10)]
     assert((cells[0].0 == 2) & (cells[0].1 == 3), "Cell 0 incorrect");
     assert((cells[1].0 == 3) & (cells[1].1 == 3), "Cell 1 incorrect");
     assert((cells[2].0 == 4) & (cells[2].1 == 3), "Cell 2 incorrect");
-    assert((cells[3].0 == 0) & (cells[3].1 == 0), "Padding cell 3 incorrect");
-    assert((cells[4].0 == 0) & (cells[4].1 == 0), "Padding cell 4 incorrect");
+    assert((cells[3].0 == 10) & (cells[3].1 == 10), "Padding cell 3 incorrect");
+    assert((cells[4].0 == 10) & (cells[4].1 == 10), "Padding cell 4 incorrect");
 }
 
 #[test]
@@ -128,12 +140,12 @@ unconstrained fn test_expand_ship_vertical() {
     let ship = ShipData { x: 5, y: 1, orientation: 1 };
     let cells = expand_ship(ship, 4);
 
-    // Expected: [(5,1), (5,2), (5,3), (5,4), (0,0)]
+    // Expected: [(5,1), (5,2), (5,3), (5,4), (10,10)]
     assert((cells[0].0 == 5) & (cells[0].1 == 1), "Cell 0 incorrect");
     assert((cells[1].0 == 5) & (cells[1].1 == 2), "Cell 1 incorrect");
     assert((cells[2].0 == 5) & (cells[2].1 == 3), "Cell 2 incorrect");
     assert((cells[3].0 == 5) & (cells[3].1 == 4), "Cell 3 incorrect");
-    assert((cells[4].0 == 0) & (cells[4].1 == 0), "Padding cell 4 incorrect");
+    assert((cells[4].0 == 10) & (cells[4].1 == 10), "Padding cell 4 incorrect");
 }
 
 #[test]
