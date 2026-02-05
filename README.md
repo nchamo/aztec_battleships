@@ -65,16 +65,9 @@ battleships/
 
 1. Install Aztec CLI:
 ```bash
-bash -i <(curl -s https://install.aztec.network)
+VERSION=4.0.0-nightly.20260122 bash -i <(curl -sL https://install.aztec.network/4.0.0-nightly.20260122/)
 ```
-
-2. Install/update Aztec binaries:
-```bash
-# Currently we use 4.0.0-nightly.20260122 version, make sure you have the right one
-aztec-up 4.0.0-nightly.20260122
-```
-
-3. Clone and install dependencies:
+2. Clone and install dependencies:
 ```bash
 git clone <repository-url>
 cd battleships

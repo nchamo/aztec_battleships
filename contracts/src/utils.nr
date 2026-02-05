@@ -8,6 +8,7 @@ pub fn is_hosts_turn(turn: Turn) -> bool {
     turn % 2 == 0
 }
 
+// The player whose turn it is just discovered they lost, so the opponent wins
 pub fn get_winner_status(turn: Turn) -> GameStatus {
     if is_hosts_turn(turn) { STATUS_WON_BY_GUEST } else { STATUS_WON_BY_HOST }
 }
@@ -17,8 +18,9 @@ pub fn coords_to_index(x: Coordinate, y: Coordinate) -> u32 {
 }
 
 pub fn build_nullifier(game_id: GameId, turn: Turn) -> Field {
-    // Note: this leaks privacy. We should introduce a shared secret or randomness between players so that third parties
-    //       can't check which turns have been played
+    // Note: this nullifier is deterministic from game_id and turn number, which means anyone who knows the
+    // game_id can check which turns have been played. A shared secret between players would prevent this.
+    // Since both guest and host know the other's address, we could use Diffie-Hellman to generate this secret.
     poseidon2_hash_with_separator(
         [game_id.to_field(), turn as Field],
         DOM_SEP__TURN_NULLIFIER,
@@ -89,36 +91,7 @@ pub fn validate_and_build_board(ships: ShipPlacement) -> [bool; TOTAL_CELLS] {
 // UNIT TESTS
 // ============================================================================
 
-// Helper functions for unit tests
-fn create_valid_ships_for_test() -> ShipPlacement {
-    ShipPlacement {
-        carrier: ShipData { x: 0, y: 0, orientation: 0 },     // (0,0)-(4,0) horizontal
-        battleship: ShipData { x: 0, y: 1, orientation: 0 },  // (0,1)-(3,1) horizontal
-        cruiser: ShipData { x: 0, y: 2, orientation: 0 },     // (0,2)-(2,2) horizontal
-        submarine: ShipData { x: 0, y: 3, orientation: 0 },   // (0,3)-(2,3) horizontal
-        destroyer: ShipData { x: 0, y: 4, orientation: 0 },   // (0,4)-(1,4) horizontal
-    }
-}
-
-fn create_valid_ships_player2_for_test() -> ShipPlacement {
-    ShipPlacement {
-        carrier: ShipData { x: 5, y: 5, orientation: 1 },     // (5,5)-(5,9) vertical
-        battleship: ShipData { x: 6, y: 5, orientation: 1 },  // (6,5)-(6,8) vertical
-        cruiser: ShipData { x: 7, y: 5, orientation: 1 },     // (7,5)-(7,7) vertical
-        submarine: ShipData { x: 8, y: 5, orientation: 1 },   // (8,5)-(8,7) vertical
-        destroyer: ShipData { x: 9, y: 5, orientation: 1 },   // (9,5)-(9,6) vertical
-    }
-}
-
-fn create_overlapping_ships_for_test() -> ShipPlacement {
-    ShipPlacement {
-        carrier: ShipData { x: 0, y: 0, orientation: 0 },
-        battleship: ShipData { x: 0, y: 0, orientation: 0 },  // Same position as carrier!
-        cruiser: ShipData { x: 5, y: 5, orientation: 0 },
-        submarine: ShipData { x: 6, y: 6, orientation: 0 },
-        destroyer: ShipData { x: 7, y: 7, orientation: 0 },
-    }
-}
+use crate::test::utils::{create_valid_ships, create_valid_ships_player2, create_overlapping_ships};
 
 // expand_ship() tests
 
@@ -207,7 +180,7 @@ unconstrained fn test_validate_shot_both_out_of_bounds() {
 
 #[test]
 unconstrained fn test_validate_and_build_board_valid_ships() {
-    let ships = create_valid_ships_for_test();
+    let ships = create_valid_ships();
     let board = validate_and_build_board(ships);
 
     // Verify carrier cells (0,0)-(4,0) are marked
@@ -233,13 +206,13 @@ unconstrained fn test_validate_and_build_board_valid_ships() {
 
 #[test(should_fail_with = "Ships overlap")]
 unconstrained fn test_validate_and_build_board_overlapping() {
-    let ships = create_overlapping_ships_for_test();
+    let ships = create_overlapping_ships();
     let _ = validate_and_build_board(ships);
 }
 
 #[test]
 unconstrained fn test_validate_and_build_board_vertical_ships() {
-    let ships = create_valid_ships_player2_for_test();
+    let ships = create_valid_ships_player2();
     let board = validate_and_build_board(ships);
 
     // Carrier is vertical at (5,5)-(5,9): indices 55,65,75,85,95
@@ -267,7 +240,7 @@ unconstrained fn test_validate_and_build_board_extends_past_edge() {
 
 #[test]
 unconstrained fn test_validate_and_build_board_count_cells() {
-    let ships = create_valid_ships_for_test();
+    let ships = create_valid_ships();
     let board = validate_and_build_board(ships);
 
     // Count total marked cells (should be 17)

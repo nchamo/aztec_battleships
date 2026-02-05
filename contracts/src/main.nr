@@ -46,7 +46,7 @@ contract Battleships {
         // PRIVATE
         // Each player will store their own board
         private_board: Map<GameId, Owned<PrivateImmutable<BoardNote, Context>, Context>, Context>,
-        // Each player will store their own turn (shot, timestamp), and then they will send the note to their opponent. By doing so, 
+        // Each player will store their own turn (shot, timestamp, prev shot result), and then they will send the note to their opponent. By doing so, 
         // each player will learn the other's shot
         private_turns: Map<GameId, Map<Turn, Owned<PrivateImmutable<PlayedTurnNote, Context>, Context>, Context>, Context>,
         // Each player will remember their own shots, to avoid shooting the same coordinate twice 
@@ -131,6 +131,10 @@ contract Battleships {
         // Guest's first shot - no previous opponent shot to verify, so opponent_shot_hit is false
         self.internal.apply_my_shot(game_id, host, initial_shot, 1, false);
 
+        // Mark turn 1 as played
+        let nullifier = crate::utils::build_nullifier(game_id, 1);
+        self.context.push_nullifier(nullifier);
+
         // Enqueue public function to start game        
         Battleships::at(self.address)
             ._on_game_joined(game_id, guest)
@@ -171,12 +175,17 @@ contract Battleships {
         assert(turn_player == player, "Invalid player");
 
         // Read opponent's turn
-        // Note: fetching the note would fail if it didn't exist
+        // Note: fetching the note would fail if the previous turn wasn't played
         let opponents_turn = self.storage.private_turns
             .at(game_id)
             .at(turn - 1)
             .at(opponent)
             .get_note();
+
+        
+        // Mark this turn as played. If this turn has already been played then this would fail
+        let nullifier = crate::utils::build_nullifier(game_id, turn);
+        self.context.push_nullifier(nullifier);
 
         let (opponent_shot_hit, did_i_lose) = self.internal.verify_opponents_shot(game_id, opponents_turn.shot);
 
@@ -185,26 +194,10 @@ contract Battleships {
                 ._on_finished(game_id, get_winner_status(turn))
                 .enqueue(self.context);
         } else {
-            // Pass opponent_shot_hit so opponent learns if their previous shot was successful
             self.internal.apply_my_shot(game_id, opponent, shot, turn, opponent_shot_hit);
-
-            // Note: this leaks privacy. Other will know this transaction is for battleship playing
-            Battleships::at(self.address)
-                ._validate_game_active(game_id)
-                .enqueue(self.context);
         }
     }
     
-
-    #[external("public")]
-    #[only_self]
-    fn _validate_game_active(game_id: GameId) {
-        let game_status = self.storage.public_game_status
-            .at(game_id)
-            .read();
-
-        assert(game_status == STATUS_ACTIVE, "Game not active");
-    }
 
     #[external("public")]
     #[only_self]
@@ -220,7 +213,6 @@ contract Battleships {
             .write(end_status);
     }
 
-    // Returns (is_hit, did_i_lose)
     #[internal("private")]
     fn verify_opponents_shot(game_id: GameId, opponent_shot: Shot) -> (bool, bool) {
         let player = self.msg_sender();
@@ -234,6 +226,7 @@ contract Battleships {
         let idx = coords_to_index(opponent_shot.x, opponent_shot.y);
         let is_hit = my_board[idx as u32];
 
+        // We use a mutable reference because the closure passed to `replace` can't return extra values
         let lost = &mut false;
         if is_hit {
             // Read & update counter
@@ -282,13 +275,9 @@ contract Battleships {
         // We are setting the include_by_timestamp property to force players to choose anchors close to the present.
         // If we didn't do this, then a player might wait up until their timeout is almost completed, and then
         // select an anchor block that is way in the past. By doing this, they would be able to force their opponent
-        // to react quickly and play their turn or then they might loose to abandonment
+        // to react quickly and play their turn or then they might lose to abandonment
         let one_hour = 60 * 60;
         self.context.set_include_by_timestamp(timestamp + one_hour);
-
-        // Emit nullifier so that I can later prove that this turn has been played
-        let nullifier = crate::utils::build_nullifier(game_id, turn);
-        self.context.push_nullifier(nullifier);
     }
    
     // ============================================================================

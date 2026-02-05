@@ -1,59 +1,23 @@
-use crate::types::{ShipData, ShipPlacement};
+use crate::types::{ShipData, ShipPlacement, SHIP_SIZES};
+use crate::utils::expand_ship;
 
-// Calculate all cells occupied by a ship placement
+fn copy_ship_cells(cells: &mut [(u8, u8); 17], index: &mut u32, ship: ShipData, length: u8) {
+    let expanded = expand_ship(ship, length);
+    for i in 0..length {
+        cells[*index] = expanded[i as u32];
+        *index += 1;
+    }
+}
+
 pub fn get_ship_cells(placement: ShipPlacement) -> [(u8, u8); 17] {
     let mut cells: [(u8, u8); 17] = [(0, 0); 17];
-    let mut index = 0;
+    let mut index: u32 = 0;
 
-    // Carrier (5 cells)
-    for i in 0..5 {
-        if placement.carrier.orientation == 0 {
-            cells[index] = (placement.carrier.x + i, placement.carrier.y);
-        } else {
-            cells[index] = (placement.carrier.x, placement.carrier.y + i);
-        }
-        index += 1;
-    }
-
-    // Battleship (4 cells)
-    for i in 0..4 {
-        if placement.battleship.orientation == 0 {
-            cells[index] = (placement.battleship.x + i, placement.battleship.y);
-        } else {
-            cells[index] = (placement.battleship.x, placement.battleship.y + i);
-        }
-        index += 1;
-    }
-
-    // Cruiser (3 cells)
-    for i in 0..3 {
-        if placement.cruiser.orientation == 0 {
-            cells[index] = (placement.cruiser.x + i, placement.cruiser.y);
-        } else {
-            cells[index] = (placement.cruiser.x, placement.cruiser.y + i);
-        }
-        index += 1;
-    }
-
-    // Submarine (3 cells)
-    for i in 0..3 {
-        if placement.submarine.orientation == 0 {
-            cells[index] = (placement.submarine.x + i, placement.submarine.y);
-        } else {
-            cells[index] = (placement.submarine.x, placement.submarine.y + i);
-        }
-        index += 1;
-    }
-
-    // Destroyer (2 cells)
-    for i in 0..2 {
-        if placement.destroyer.orientation == 0 {
-            cells[index] = (placement.destroyer.x + i, placement.destroyer.y);
-        } else {
-            cells[index] = (placement.destroyer.x, placement.destroyer.y + i);
-        }
-        index += 1;
-    }
+    copy_ship_cells(&mut cells, &mut index, placement.carrier, SHIP_SIZES[0]);
+    copy_ship_cells(&mut cells, &mut index, placement.battleship, SHIP_SIZES[1]);
+    copy_ship_cells(&mut cells, &mut index, placement.cruiser, SHIP_SIZES[2]);
+    copy_ship_cells(&mut cells, &mut index, placement.submarine, SHIP_SIZES[3]);
+    copy_ship_cells(&mut cells, &mut index, placement.destroyer, SHIP_SIZES[4]);
 
     cells
 }

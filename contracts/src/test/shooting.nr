@@ -2,7 +2,7 @@ use dep::aztec::{
     test::helpers::test_environment::TestEnvironment,
 };
 use crate::Battleships;
-use crate::types::{Shot, GameId, STATUS_WON_BY_HOST};
+use crate::types::{Shot, GameId, STATUS_WON_BY_HOST, STATUS_WON_BY_GUEST, TURN_TIMEOUT};
 use crate::test::utils::{create_valid_ships, create_valid_ships_player2, get_ship_cells};
 
 // ============================================================================
@@ -287,5 +287,136 @@ unconstrained fn test_shoot_after_host_wins() {
             turn,
             Shot { x: 5, y: 5 }
         )
+    );
+}
+
+#[test(should_fail_with = "Failed to get a note")]
+unconstrained fn test_shoot_after_guest_wins() {
+    let mut env = TestEnvironment::new();
+    let host = env.create_light_account();
+    let guest = env.create_light_account();
+    let contract_address = env.deploy("Battleships").without_initializer();
+
+    let game_id = GameId::new(200010);
+
+    let host_ships = create_valid_ships();
+    let guest_ships = create_valid_ships_player2();
+
+    env.call_private(
+        host,
+        Battleships::at(contract_address).create_game(game_id, host_ships)
+    );
+
+    let host_ship_cells = get_ship_cells(host_ships);
+
+    env.call_private(
+        guest,
+        Battleships::at(contract_address).join_game(
+            game_id,
+            guest_ships,
+            Shot { x: host_ship_cells[0].0, y: host_ship_cells[0].1 }
+        )
+    );
+
+    let host_miss_coords: [(u8, u8); 16] = [
+        (9, 0), (9, 1), (9, 2), (9, 3),
+        (9, 4), (9, 5), (9, 6), (9, 7),
+        (9, 8), (9, 9), (1, 9), (2, 9),
+        (3, 9), (4, 9), (5, 9), (6, 9),
+    ];
+
+    let mut turn = 2;
+
+    for i in 1..17 {
+        env.call_private(
+            host,
+            Battleships::at(contract_address).shoot(
+                game_id,
+                turn,
+                Shot { x: host_miss_coords[i - 1].0, y: host_miss_coords[i - 1].1 }
+            )
+        );
+        turn += 1;
+
+        env.call_private(
+            guest,
+            Battleships::at(contract_address).shoot(
+                game_id,
+                turn,
+                Shot { x: host_ship_cells[i].0, y: host_ship_cells[i].1 }
+            )
+        );
+        turn += 1;
+    }
+
+    // Host takes final turn (detects loss, skips apply_my_shot, enqueues _on_finished)
+    env.call_private(
+        host,
+        Battleships::at(contract_address).shoot(
+            game_id,
+            turn,
+            Shot { x: 7, y: 9 }
+        )
+    );
+    turn += 1;
+
+    let final_status = env.simulate_utility(Battleships::at(contract_address).get_game_status(game_id));
+    assert(final_status == STATUS_WON_BY_GUEST, "Game should be won by guest");
+
+    // Guest tries to shoot after game is over
+    env.call_private(
+        guest,
+        Battleships::at(contract_address).shoot(
+            game_id,
+            turn,
+            Shot { x: 5, y: 5 }
+        )
+    );
+}
+
+#[test(should_fail)]
+unconstrained fn test_shoot_after_abandonment() {
+    let mut env = TestEnvironment::new();
+    let host = env.create_light_account();
+    let guest = env.create_light_account();
+    let contract_address = env.deploy("Battleships").without_initializer();
+
+    let game_id = GameId::new(200011);
+
+    env.call_private(
+        host,
+        Battleships::at(contract_address).create_game(game_id, create_valid_ships())
+    );
+
+    env.call_private(
+        guest,
+        Battleships::at(contract_address).join_game(
+            game_id,
+            create_valid_ships_player2(),
+            Shot { x: 0, y: 0 }
+        )
+    );
+
+    env.call_private(
+        host,
+        Battleships::at(contract_address).shoot(game_id, 2, Shot { x: 5, y: 5 })
+    );
+
+    let host_shot_time = env.last_block_timestamp();
+    let timeout_timestamp = host_shot_time + TURN_TIMEOUT + 3600;
+    env.mine_block_at(timeout_timestamp);
+
+    env.call_private(
+        host,
+        Battleships::at(contract_address).claim_abandonment(game_id, 3)
+    );
+
+    let final_status = env.simulate_utility(Battleships::at(contract_address).get_game_status(game_id));
+    assert(final_status == STATUS_WON_BY_HOST, "Game should be won by host");
+
+    // Guest tries to shoot after abandonment - fails due to duplicate nullifier
+    env.call_private(
+        guest,
+        Battleships::at(contract_address).shoot(game_id, 3, Shot { x: 3, y: 3 })
     );
 }
